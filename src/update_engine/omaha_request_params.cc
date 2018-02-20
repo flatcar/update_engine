@@ -31,7 +31,7 @@ const char* const OmahaRequestParams::kOsPlatform("CoreOS");
 const char* const OmahaRequestParams::kOsVersion("Chateau");
 const char* const OmahaRequestParams::kDefaultChannel("stable");
 const char* const kProductionOmahaUrl(
-    "https://public.update.core-os.net/v1/update/");
+    "https://test.update.flatcar-linux.net/v1/update/");
 
 bool OmahaRequestParams::Init(bool interactive) {
   os_platform_ = OmahaRequestParams::kOsPlatform;
