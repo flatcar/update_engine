@@ -87,7 +87,7 @@ elif [[ -z "${INSTALL_KERNEL}" ]]; then
     # not a legacy system but update_engine didn't handle the kernel.
     # kernel names are in lower case, ${SLOT,,} converts the slot name
     cp -v "${INSTALL_MNT}/boot/vmlinuz" \
-       "${ESP_MNT}/coreos/vmlinuz-${SLOT,,}"
+       "${ESP_MNT}/flatcar/vmlinuz-${SLOT,,}"
 fi
 
 # If the OEM provides a hook, call it
@@ -230,7 +230,7 @@ good_sysctl() {
 # first release to include this Tectonic work-around). This ensures that we
 # only apply this work-around one time.
 source /usr/lib/os-release
-DOCKER_FLAG_PATH="/etc/coreos/docker-1.12"
+DOCKER_FLAG_PATH="/etc/flatcar/docker-1.12"
 if [ ! -e "${DOCKER_FLAG_PATH}" ] && [ "${VERSION_ID%%.*}" -lt 1576 ] &&
     good_kubelet && good_sysctl
 then
@@ -275,5 +275,5 @@ call_cgpt add -S0 -T1 "${INSTALL_DEV}"
 call_cgpt prioritize "${INSTALL_DEV}"
 call_cgpt show "${INSTALL_DEV}"
 
-cat "${INSTALL_MNT}/share/coreos/release"
+cat "${INSTALL_MNT}/share/flatcar/release"
 echo "Setup ${INSTALL_LABEL} (${INSTALL_DEV}) for next boot."
