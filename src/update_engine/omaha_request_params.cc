@@ -38,7 +38,7 @@ bool OmahaRequestParams::Init(bool interactive) {
   os_version_ = OmahaRequestParams::kOsVersion;
   oemid_ = GetOemValue("ID", "");
   oemversion_ = GetOemValue("VERSION_ID", "");
-  app_version_ = GetConfValue("COREOS_RELEASE_VERSION", "");
+  app_version_ = GetConfValue("FLATCAR_RELEASE_VERSION", "");
 
   if (!system_state_->prefs()->GetString(kPrefsAlephVersion, &alephversion_)) {
     alephversion_.assign(app_version_);
@@ -46,8 +46,8 @@ bool OmahaRequestParams::Init(bool interactive) {
   }
 
   os_sp_ = app_version_ + "_" + GetMachineType();
-  os_board_ = GetConfValue("COREOS_RELEASE_BOARD", "");
-  app_id_ = GetConfValue("COREOS_RELEASE_APPID", OmahaRequestParams::kAppId);
+  os_board_ = GetConfValue("FLATCAR_RELEASE_BOARD", "");
+  app_id_ = GetConfValue("FLATCAR_RELEASE_APPID", OmahaRequestParams::kAppId);
   app_lang_ = "en-US";
   bootid_ = utils::GetBootId();
   machineid_ = utils::GetMachineId();
@@ -86,9 +86,9 @@ string OmahaRequestParams::SearchConfValue(const vector<string>& files,
 string OmahaRequestParams::GetConfValue(const string& key,
                                         const string& default_value) const {
   vector<string> files;
-  files.push_back("/etc/coreos/update.conf");
-  files.push_back("/usr/share/coreos/update.conf");
-  files.push_back("/usr/share/coreos/release");
+  files.push_back("/etc/flatcar/update.conf");
+  files.push_back("/usr/share/flatcar/update.conf");
+  files.push_back("/usr/share/flatcar/release");
   return SearchConfValue(files, key, default_value);
 }
 
