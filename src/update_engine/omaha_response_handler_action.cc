@@ -131,15 +131,23 @@ bool OmahaResponseHandlerAction::GetKernelPath(const std::string& part_path,
     return true;
   }
 
+  files::FilePath flatcar_dir = files::FilePath("/boot/flatcar");
+
   // If the target fs is 3, the kernel name is vmlinuz-a.
   // If the target fs is 4, the kernel name is vmlinuz-b.
   char last_char = part_path[part_path.size() - 1];
   if (last_char == '3') {
-    *kernel_path = "/boot/flatcar/vmlinuz-a";
+    if (files::PathExists(flatcar_dir))
+      *kernel_path = "/boot/flatcar/vmlinuz-a";
+    else
+      *kernel_path = "/boot/coreos/vmlinuz-a";
     return true;
   }
   if (last_char == '4') {
-    *kernel_path = "/boot/flatcar/vmlinuz-b";
+    if (files::PathExists(flatcar_dir))
+      *kernel_path = "/boot/flatcar/vmlinuz-b";
+    else
+      *kernel_path = "/boot/coreos/vmlinuz-b";
     return true;
   }
   return false;
