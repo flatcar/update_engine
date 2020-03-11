@@ -498,6 +498,10 @@ bool OmahaRequestAction::ParsePackage(xmlDoc* doc,
   // propagate the urlBase vs packageName distinctions beyond this point.
   // From now on, we only need to use payload_urls.
   for (size_t i = 0; i < output_object->payload_urls.size(); i++) {
+    // The strings should not be empty but better check that instead of crashing for back() on an empty string
+    if (output_object->payload_urls[i].length() > 0 && output_object->payload_urls[i].back() != '/') {
+      output_object->payload_urls[i] += "/";
+    }
     output_object->payload_urls[i] += package_name;
     LOG(INFO) << "Url" << i << ": " << output_object->payload_urls[i];
   }

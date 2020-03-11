@@ -379,6 +379,38 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
   EXPECT_TRUE(response.deadline.empty());
 }
 
+TEST(OmahaRequestActionTest, ConcatUrlSlashTest) {
+  // same as MissingFieldTest above besides the URL
+  string input_response =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?><response protocol=\"3.0\">"
+      "<daystart elapsed_seconds=\"100\"/>"
+      "<app appid=\"xyz\" status=\"ok\">"
+      "<updatecheck status=\"ok\">"
+      "<urls><url codebase=\"http://concat/url/slash/test\"/></urls>"
+      "<manifest version=\"1.0.0.0\">"
+      "<packages><package hash=\"not-used\" name=\"f\" "
+      "size=\"587\"/></packages>"
+      "<actions><action event=\"postinstall\" "
+      "Prompt=\"false\" "
+      "IsDelta=\"true\" "
+      "IsDeltaPayload=\"false\" "
+      "sha256=\"lkq34j5345\" "
+      "needsadmin=\"true\" "
+      "/></actions></manifest></updatecheck></app></response>";
+  LOG(INFO) << "Input Response = " << input_response;
+
+  OmahaResponse response;
+  ASSERT_TRUE(TestUpdateCheck(NULL,  // prefs
+                              kDefaultTestParams,
+                              input_response,
+                              -1,
+                              false,  // ping_only
+                              kActionCodeSuccess,
+                              &response,
+                              NULL));
+  EXPECT_EQ("http://concat/url/slash/test/f", response.payload_urls[0]);
+}
+
 namespace {
 class TerminateEarlyTestProcessorDelegate : public ActionProcessorDelegate {
  public:
