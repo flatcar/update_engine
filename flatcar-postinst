@@ -86,7 +86,7 @@ if grep -q cros_legacy /proc/cmdline; then
 elif [[ -z "${INSTALL_KERNEL}" ]]; then
     # not a legacy system but update_engine didn't handle the kernel.
     # kernel names are in lower case, ${SLOT,,} converts the slot name
-    if [ -e "${ESP_MNT}/coreos" ]; then
+    if [ -e "${ESP_MNT}/coreos/vmlinuz-a" ] || [ -e "${ESP_MNT}/coreos/vmlinuz-b" ]; then
         cp -v "${INSTALL_MNT}/boot/vmlinuz" \
            "${ESP_MNT}/coreos/vmlinuz-${SLOT,,}"
     else
