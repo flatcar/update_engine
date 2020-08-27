@@ -690,6 +690,8 @@ string CodeToString(ActionExitCode code) {
       return "kActionCodeNewPCRPolicyVerificationError";
     case kActionCodeNewPCRPolicyHTTPError:
       return "kActionCodeNewPCRPolicyHTTPError";
+    case kActionCodeRollbackError:
+      return "kActionCodeRollbackError";
     case kActionCodeDownloadIncomplete:
       return "kActionCodeDownloadIncomplete";
     case kActionCodeOmahaRequestHTTPResponseBase:
