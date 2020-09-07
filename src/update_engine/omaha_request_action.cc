@@ -95,26 +95,48 @@ string GetAppBody(const OmahaEvent* event,
   if (event == NULL) {
     app_body = GetPingXml(ping_active_days, ping_roll_call_days);
     if (!ping_only) {
-      app_body += "        <updatecheck></updatecheck>\n";
-
-      // If this is the first update check after a reboot following a previous
-      // update, generate an event containing the previous version number. If
-      // the previous version preference file doesn't exist the event is still
-      // generated with a previous version of 0.0.0.0 -- this is relevant for
-      // older clients or new installs. The previous version event is not sent
-      // for ping-only requests because they come before the client has
-      // rebooted.
+      string current_version;
       string prev_version;
+
+      current_version = params.app_version();
+
       if (!prefs->GetString(kPrefsPreviousVersion, &prev_version)) {
-        prev_version = "0.0.0.0";
+        prev_version = "initial";
       }
 
-      app_body += StringPrintf(
-          "        <event eventtype=\"%d\" eventresult=\"%d\" "
-          "previousversion=\"%s\"></event>\n",
-          OmahaEvent::kTypeUpdateComplete,
-          OmahaEvent::kResultSuccessReboot,
-          XmlEncode(prev_version).c_str());
+      app_body += "        <updatecheck></updatecheck>\n";
+
+      // Check if currently the same version is running as before the update, which indicates that
+      // a rollback took place.
+      // We do not need to check for UPDATE_STATUS_UPDATED_NEED_REBOOT because a new update won't
+      // be attempted until the system rebooted.
+      if (!prev_version.empty() && prev_version.compare(current_version) == 0) {
+        LOG(ERROR) << "Rollback detected, still running " << prev_version << " after update.";
+
+        app_body += StringPrintf(
+            "        <event eventtype=\"%d\" eventresult=\"%d\" errorcode=\"%d\"></event>\n",
+            OmahaEvent::kTypeUpdateComplete, OmahaEvent::kResultError, kActionCodeRollbackError);
+
+      } else {
+        // If this is the first update check after a reboot following a previous
+        // update, generate an event containing the previous version number. If
+        // the previous version preference file doesn't exist the event is still
+        // generated with a previous version of 0.0.0.0 -- this is relevant for
+        // older clients or new installs. The previous version event is not sent
+        // for ping-only requests because they come before the client has
+        // rebooted.
+        if (prev_version.compare("initial") == 0) {
+          prev_version = "0.0.0.0";
+        }
+
+        app_body += StringPrintf(
+            "        <event eventtype=\"%d\" eventresult=\"%d\" "
+            "previousversion=\"%s\"></event>\n",
+            OmahaEvent::kTypeUpdateComplete,
+            OmahaEvent::kResultSuccessReboot,
+            XmlEncode(prev_version).c_str());
+      }
+
       LOG_IF(WARNING, !prefs->SetString(kPrefsPreviousVersion, ""))
           << "Unable to reset the previous version.";
     }
