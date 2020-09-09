@@ -193,6 +193,9 @@ void UpdateAttempter::BuildUpdateActions(bool interactive) {
                              false));
   LibcurlHttpFetcher* download_fetcher = new LibcurlHttpFetcher();
   download_fetcher->set_check_certificate(CertificateChecker::kDownload);
+  download_fetcher->set_auth_credentials(
+      omaha_request_params_->download_user(),
+      omaha_request_params_->download_password());
   shared_ptr<DownloadAction> download_action(
       new DownloadAction(prefs_,
                          new MultiRangeHttpFetcher(

@@ -150,6 +150,9 @@ void LibcurlHttpFetcher::ResumeTransfer(const std::string& url) {
 // Lock down only the protocol in case of HTTP.
 void LibcurlHttpFetcher::SetCurlOptionsForHttp() {
   LOG(INFO) << "Setting up curl options for HTTP";
+  if (!auth_user_.empty()) {
+    LOG(INFO) << "(This is not HTTPS, ignoring HTTP Auth credentials)";
+  }
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_PROTOCOLS, CURLPROTO_HTTP),
            CURLE_OK);
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_REDIR_PROTOCOLS,
@@ -183,6 +186,11 @@ void LibcurlHttpFetcher::SetCurlOptionsForHttps() {
     CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_SSL_CTX_FUNCTION,
                               CertificateChecker::ProcessSSLContext),
              CURLE_OK);
+  }
+  if (!auth_user_.empty()) {
+    curl_easy_setopt(curl_handle_, CURLOPT_USERNAME, auth_user_.c_str());
+    curl_easy_setopt(curl_handle_, CURLOPT_PASSWORD, auth_password_.c_str());
+    curl_easy_setopt(curl_handle_, CURLOPT_HTTPAUTH, CURLAUTH_ANY);
   }
 }
 

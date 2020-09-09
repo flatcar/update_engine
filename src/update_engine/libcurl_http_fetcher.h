@@ -101,6 +101,13 @@ class LibcurlHttpFetcher : public HttpFetcher {
     check_certificate_ = check_certificate;
   }
 
+  // Sets HTTP Auth user and password for HTTPS connections.
+  // Copies the given credentials.
+  void set_auth_credentials(const char* auth_user, const char* auth_password) {
+    auth_user_ = auth_user;
+    auth_password_ = auth_password;
+  }
+
   virtual size_t GetBytesDownloaded() {
     return static_cast<size_t>(bytes_downloaded_);
   }
@@ -259,6 +266,10 @@ class LibcurlHttpFetcher : public HttpFetcher {
   // connection's certificate. If no certificate check needs to be performed,
   // this should be kNone.
   CertificateChecker::ServerToCheck check_certificate_;
+
+  // If auth_user_ is set cURL HTTP Auth is set up for HTTPS connections.
+  std::string auth_user_;
+  std::string auth_password_;
 
   DISALLOW_COPY_AND_ASSIGN(LibcurlHttpFetcher);
 };
