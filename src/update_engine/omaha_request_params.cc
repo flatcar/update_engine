@@ -53,6 +53,8 @@ bool OmahaRequestParams::Init(bool interactive) {
   machineid_ = utils::GetMachineId();
   update_url_ = GetConfValue("SERVER", kProductionOmahaUrl);
   pcr_policy_url_ = GetConfValue("PCR_POLICY_SERVER", "");
+  download_user_ = GetConfValue("DOWNLOAD_USER", "");
+  download_password_ = GetConfValue("DOWNLOAD_PASSWORD", "");
   interactive_ = interactive;
 
   app_channel_ = GetConfValue("GROUP", kDefaultChannel);
