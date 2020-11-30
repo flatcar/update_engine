@@ -18,7 +18,7 @@ jobs:
         sudo apt install -y libblkid-dev libext2fs-dev libmount-dev curl unzip
     - name: prep rootdev
       run: |
-        curl -o /tmp/seismograph.zip https://github.com/kinvolk/seismograph/archive/flatcar-master.zip
+        curl -sSL -o /tmp/seismograph.zip https://github.com/kinvolk/seismograph/archive/flatcar-master.zip
         cd /tmp && unzip /tmp/seismograph.zip && cd seismograph-flatcar-master && sh autogen.sh && ./configure && make && make install
     - name: autogen
       run: ./autogen.sh
