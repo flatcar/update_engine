@@ -332,7 +332,7 @@ TEST(PayloadStateTest, SetResponseResetsInvalidUrlIndex) {
   EXPECT_CALL(prefs2, GetInt64(kPrefsPayloadAttemptNumber, _));
   EXPECT_CALL(prefs2, GetInt64(kPrefsBackoffExpiryTime, _));
   EXPECT_CALL(prefs2, GetInt64(kPrefsCurrentUrlIndex, _))
-      .WillOnce(DoAll(SetArgumentPointee<1>(2), Return(true)));
+      .WillOnce(testing::DoAll(SetArgumentPointee<1>(2), Return(true)));
   EXPECT_CALL(prefs2, GetInt64(kPrefsCurrentUrlFailureCount, _));
 
   // Note: This will be a different payload object, but the response should
