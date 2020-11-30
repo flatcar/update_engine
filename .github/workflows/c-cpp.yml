@@ -19,7 +19,7 @@ jobs:
     - name: prep rootdev
       run: |
         curl -sSL -o /tmp/seismograph.zip https://github.com/kinvolk/seismograph/archive/flatcar-master.zip
-        cd /tmp && unzip /tmp/seismograph.zip && cd seismograph-flatcar-master && sh autogen.sh && ./configure && make && make install
+        cd /tmp && unzip /tmp/seismograph.zip && cd seismograph-flatcar-master && sh autogen.sh && ./configure && make && sudo make install
     - name: autogen
       run: ./autogen.sh
     - name: configure
