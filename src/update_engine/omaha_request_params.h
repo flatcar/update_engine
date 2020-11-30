@@ -78,6 +78,7 @@ class OmahaRequestParams {
   inline std::string hwid() const { return hwid_; }
   inline std::string bootid() const { return bootid_; }
   inline std::string machineid() const { return machineid_; }
+  inline std::string machinealias() const { return machinealias_; }
   inline std::string oemid() const { return oemid_; }
   inline std::string oemversion() const { return oemversion_; }
   inline std::string alephversion() const { return alephversion_; }
@@ -152,6 +153,7 @@ class OmahaRequestParams {
   std::string hwid_;  // Hardware Qualification ID of the client
   std::string bootid_;  // Kernel generated guid that identifies this boot
   std::string machineid_; // Unique machine ID that is set during installation 
+  std::string machinealias_; // Custom alias for the machine (optional, the empty string will be ignored)
   std::string oemid_; // Unique machine ID that is set during installation 
   std::string oemversion_; // CoreOS version set during installation
   std::string alephversion_; // first CoreOS version cached by update_engine

@@ -31,6 +31,7 @@ VERSION="${FLATCAR_RELEASE_VERSION}"
 : ${SERVER:="https://public.update.flatcar-linux.net/v1/update/"}
 : ${GROUP:="alpha"}
 : ${OEM_ID:="diskless"}
+: ${MACHINE_ALIAS:=""}
 
 fill_attrs() {
     echo -n "appid=\"${FLATCAR_RELEASE_APPID}\" "
@@ -40,6 +41,7 @@ fill_attrs() {
     echo -n "bootid=\"{${BOOT_ID}}\" "
     # other UUID's are surrounded by {} but not machineid
     echo -n "machineid=\"${MACHINE_ID}\" "
+    echo -n "machinealias=\"${MACHINE_ALIAS}\" "
     echo -n "lang=\"en-US\" "
     echo -n "hardware_class=\"\" "
     echo -n "delta_okay=\"false\" "

@@ -51,6 +51,7 @@ bool OmahaRequestParams::Init(bool interactive) {
   app_lang_ = "en-US";
   bootid_ = utils::GetBootId();
   machineid_ = utils::GetMachineId();
+  machinealias_ = GetConfValue("MACHINE_ALIAS", "");
   update_url_ = GetConfValue("SERVER", kProductionOmahaUrl);
   pcr_policy_url_ = GetConfValue("PCR_POLICY_SERVER", "");
   download_user_ = GetConfValue("DOWNLOAD_USER", "");
