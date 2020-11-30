@@ -1,5 +1,7 @@
 # update_engine
 
+![C/C++ CI](https://github.com/kinvolk/update_engine/workflows/C/C++%20CI/badge.svg)
+
 update daemon for Flatcar Container Linux
 
 ## Bugs
