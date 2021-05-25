@@ -125,7 +125,16 @@ UpdateAttempter::UpdateAttempter(SystemState* system_state,
 
 void UpdateAttempter::Update(bool interactive) {
   fake_update_success_ = false;
+
   if (status_ == UPDATE_STATUS_UPDATED_NEED_REBOOT) {
+    // we init the request_params to generate the correct payload
+    // and provide the correct `update_url`
+    http_response_code_ = 0;
+    if (!omaha_request_params_->Init(interactive)) {
+      LOG(ERROR) << "Unable to initialize Omaha request device params.";
+      return;
+    }
+
     // Although we have applied an update, we still want to ping Omaha
     // to ensure the number of active statistics is accurate.
     LOG(INFO) << "Not updating b/c we already updated and we're waiting for "
