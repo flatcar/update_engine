@@ -186,9 +186,13 @@ bool CheckForUpdates() {
 
 static gboolean CompleteUpdateSource(gpointer data) {
   string current_op;
-  if (!GetStatus(&current_op) || current_op == "UPDATE_STATUS_IDLE") {
+  if (!GetStatus(&current_op)) {
     LOG(ERROR) << "Update failed.";
     exit(1);
+  }
+  if (current_op == "UPDATE_STATUS_IDLE") {
+    LOG(INFO) << "No update available";
+    exit(0);
   }
   if (current_op == "UPDATE_STATUS_UPDATED_NEED_REBOOT") {
     LOG(INFO) << "Update succeeded -- reboot needed.";
