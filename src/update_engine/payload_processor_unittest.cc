@@ -327,7 +327,8 @@ static void GenerateDeltaFile(DeltaState *state) {
                                   &state->b_kernel,
                                   NULL));
 
-  state->b_kernel_data.resize(kDefaultKernelSize);
+  state->a_kernel_data.resize(kDefaultKernelSize);
+  state->b_kernel_data.resize(state->a_kernel_data.size());
   FillWithData(&state->b_kernel_data);
   // A known bit of data to test for later.
   strcpy(&state->b_kernel_data[0], kNewDataString);
