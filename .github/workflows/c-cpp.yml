@@ -24,7 +24,7 @@ jobs:
     - name: prep bsdiff
       # because unittests depend on chromiumos version of bsdiff
       run: |
-        cd /tmp && git clone --depth=1 https://android.googlesource.com/platform/external/bsdiff && cd bsdiff && make -j$(nproc) && sudo make install PREFIX=/usr/local
+        cd /tmp && git clone https://android.googlesource.com/platform/external/bsdiff && cd bsdiff && git checkout 7b331f19d984c508be8935bdcab2ab6c267f3b57 && make -j$(nproc) && sudo make install PREFIX=/usr/local
     - name: autogen
       run: ./autogen.sh
     - name: configure
