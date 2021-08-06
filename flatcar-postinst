@@ -331,7 +331,7 @@ patch_grub
 # Keep old nodes on cgroup v1
 if ! grep -q systemd.unified_cgroup_hierarchy "${OEM_MNT}/grub.cfg" 2>/dev/null; then
     # if there is an explicit setting, don't touch it. Otherwise...
-    if [[ "${VERSION_ID}" != *"nightly"* ]]; then
+    if [[ "${BUILD_ID}" != "dev-"* ]]; then
         if [ "${VERSION_ID%%.*}" -lt 2956 ]; then
             cat >>"${OEM_MNT}/grub.cfg" <<EOF
 
