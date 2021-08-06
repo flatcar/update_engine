@@ -337,7 +337,8 @@ if ! grep -q systemd.unified_cgroup_hierarchy "${OEM_MNT}/grub.cfg" 2>/dev/null;
 
 # Automatically added during update from ${VERSION_ID} to ${NEXT_VERSION_ID}
 # Flatcar has migrated to cgroup v2. Your node has been kept on cgroup v1.
-# Migrate at your own convenience by changing the value to '=1'
+# Migrate at your own convenience by changing the value to '=1', or remove this
+# line if you don't need to switch back.
 # For more details visit:
 # https://kinvolk.io/docs/flatcar-container-linux/latest/container-runtimes/switching-to-unified-cgroups
 set linux_append="\$linux_append systemd.unified_cgroup_hierarchy=0"
