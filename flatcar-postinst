@@ -342,7 +342,7 @@ if [[ "${BUILD_ID}" != "dev-"* ]]; then
 # line if you don't need to switch back.
 # For more details visit:
 # https://kinvolk.io/docs/flatcar-container-linux/latest/container-runtimes/switching-to-unified-cgroups
-set linux_append="\$linux_append systemd.unified_cgroup_hierarchy=0"
+set linux_append="\$linux_append systemd.unified_cgroup_hierarchy=0 systemd.legacy_systemd_cgroup_controller"
 EOF
         fi
 
