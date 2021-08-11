@@ -328,6 +328,42 @@ function patch_grub {
 
 patch_grub
 
+# Keep old nodes on cgroup v1
+if [[ "${BUILD_ID}" != "dev-"* ]]; then
+    if [ "${VERSION_ID%%.*}" -lt 2956 ]; then
+
+        # if there is an explicit setting, don't touch it. Otherwise...
+        if ! grep -q systemd.unified_cgroup_hierarchy "${OEM_MNT}/grub.cfg" 2>/dev/null; then
+            cat >>"${OEM_MNT}/grub.cfg" <<EOF
+
+# Automatically added during update from ${VERSION_ID} to ${NEXT_VERSION_ID}
+# Flatcar has migrated to cgroup v2. Your node has been kept on cgroup v1.
+# Migrate at your own convenience by changing the value to '=1', or remove this
+# line if you don't need to switch back ('systemd.legacy_systemd_cgroup_controller' only has effect for `=0`).
+# For more details visit:
+# https://kinvolk.io/docs/flatcar-container-linux/latest/container-runtimes/switching-to-unified-cgroups
+set linux_append="\$linux_append systemd.unified_cgroup_hierarchy=0 systemd.legacy_systemd_cgroup_controller"
+EOF
+        fi
+
+	if ( systemctl show -p ExecStart containerd | \
+             grep -qF '/usr/bin/env PATH=${TORCX_BINDIR}:${PATH} ${TORCX_BINDIR}/containerd --config ${TORCX_UNPACKDIR}${TORCX_IMAGEDIR}${CONTAINERD_CONFIG}' ) && \
+	   ( systemctl show -p Environment containerd | \
+	     grep -qF 'CONTAINERD_CONFIG=/usr/share/containerd/config.toml' ); then
+            mkdir -p /etc/systemd/system/containerd.service.d/
+	    cat >/etc/systemd/system/containerd.service.d/10-use-cgroupfs.conf <<EOF
+# Automatically created during update from ${VERSION_ID} to ${NEXT_VERSION_ID}
+# Flatcar has migrated to cgroup v2. Your node has been kept on cgroup v1.
+# For more details visit:
+# https://kinvolk.io/docs/flatcar-container-linux/latest/container-runtimes/switching-to-unified-cgroups
+[Service]
+Environment=CONTAINERD_CONFIG=/usr/share/containerd/config-cgroupfs.toml
+EOF
+	fi
+    fi
+fi
+
+
 # The vmware OEM on Container Linux 490.0.0 - 1353.8.0 includes a build of
 # open-vm-tools with a dlopened plugin that links with the libprocps.so.3
 # shipped in /usr. When upgrading to CL > 1786, which no longer carries
