@@ -446,3 +446,6 @@ call_cgpt show "${INSTALL_DEV}"
 
 cat "${INSTALL_MNT}/share/flatcar/release"
 echo "Setup ${INSTALL_LABEL} (${INSTALL_DEV}) for next boot."
+
+# Create the Ubuntu-compatible /run/reboot-required flag file for kured
+touch /run/reboot-required
