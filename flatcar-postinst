@@ -396,7 +396,10 @@ call_cgpt() {
 
 # locate the dynamic linker
 LDSO=
-for l in "${INSTALL_MNT}"/lib*/ld-2.??.so; do
+
+# While glibc 2.33 has /lib64/ld-2.33.so, glibc 2.34 does not have that, but only
+# /lib64/ld-linux-x86-64.so.2. So we should also check ld-linux-* as well.
+for l in "${INSTALL_MNT}"/lib*/ld-2.??.so "${INSTALL_MNT}"/lib*/ld-linux-*.so.?; do
     if [[ -x "$l" ]]; then
         LDSO="$l"
         break
