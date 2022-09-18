@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <glog/logging.h>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 
 #include "macros.h"
 
@@ -94,7 +94,7 @@ class OmahaHashCalculator {
   bool valid_;
 
   // The hash state used by OpenSSL
-  SHA256_CTX ctx_;
+  EVP_MD_CTX *ctx_;
   DISALLOW_COPY_AND_ASSIGN(OmahaHashCalculator);
 };
 
