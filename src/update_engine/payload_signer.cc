@@ -6,6 +6,7 @@
 
 #include <glog/logging.h>
 #include <openssl/pem.h>
+#include <openssl/evp.h>
 
 #include "update_engine/delta_diff_generator.h"
 #include "update_engine/delta_metadata.h"
@@ -292,27 +293,44 @@ bool PayloadSigner::GetRawHashFromSignature(
   }
 
   char dummy_password[] = { ' ', 0 };  // Ensure no password is read from stdin.
-  RSA* rsa = PEM_read_RSA_PUBKEY(fpubkey, NULL, NULL, dummy_password);
+  EVP_PKEY* pkey = PEM_read_PUBKEY(fpubkey, NULL, NULL, dummy_password);
   fclose(fpubkey);
-  TEST_AND_RETURN_FALSE(rsa != NULL);
-  unsigned int keysize = RSA_size(rsa);
+  TEST_AND_RETURN_FALSE(pkey != NULL);
+  size_t keysize = EVP_PKEY_get_size(pkey);
   if (sig_data.size() > 2 * keysize) {
     LOG(ERROR) << "Signature size is too big for public key size.";
-    RSA_free(rsa);
+    EVP_PKEY_free(pkey);
     return false;
   }
 
-  // Decrypts the signature.
   vector<char> hash_data(keysize);
-  int decrypt_size = RSA_public_decrypt(
-      sig_data.size(),
-      reinterpret_cast<const unsigned char*>(sig_data.data()),
+
+  // Decrypts the signature.
+  EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pkey, NULL);
+  if (!ctx
+      || EVP_PKEY_verify_recover_init(ctx) <= 0
+      || EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_NO_PADDING) <= 0
+      || EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) <= 0) {
+    LOG(ERROR) << "Couldn't initialise EVP_PKEY_CTX";
+    EVP_PKEY_free(pkey);
+    return false;
+  }
+
+  size_t decrypt_size = keysize;
+
+  if (!EVP_PKEY_verify_recover(ctx,
       reinterpret_cast<unsigned char*>(hash_data.data()),
-      rsa,
-      RSA_NO_PADDING);
-  RSA_free(rsa);
+      &decrypt_size,
+      reinterpret_cast<const unsigned char*>(sig_data.data()),
+      sig_data.size())) {
+    decrypt_size = 0;
+  }
+
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_free(pkey);
+
   TEST_AND_RETURN_FALSE(decrypt_size > 0 &&
-                        decrypt_size <= static_cast<int>(hash_data.size()));
+                        (ssize_t) decrypt_size <= static_cast<int>(hash_data.size()));
   hash_data.resize(decrypt_size);
   out_hash_data->swap(hash_data);
   return true;
