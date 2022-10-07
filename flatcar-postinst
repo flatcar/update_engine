@@ -3,7 +3,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-set -eo pipefail
+set -euo pipefail
 umask 0022
 
 OEM_MNT="/usr/share/oem"
