@@ -3,7 +3,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-set -eo pipefail
+set -euo pipefail
 umask 0022
 
 OEM_MNT="/usr/share/oem"
@@ -396,9 +396,20 @@ call_cgpt() {
 
 # locate the dynamic linker
 LDSO=
-for l in "${INSTALL_MNT}"/lib*/ld-2.??.so; do
+
+# While glibc 2.33 has /lib64/ld-2.33.so, glibc 2.34 does not have
+# that, but only /lib64/ld-linux-x86-64.so.2. So we should also check
+# ld-linux-* as well.
+#
+# glibc 2.35 installs a symlink to the dynamic linker under
+# /usr/bin/ld.so. Check this one too.
+#
+# Since we derive library path from the linker path, make sure we are
+# dealing with the actual executable, not with a symlink. We do it by
+# using realpath on the found file.
+for l in "${INSTALL_MNT}"/{,usr/}bin/ld.so "${INSTALL_MNT}"/lib*/ld-2.??.so "${INSTALL_MNT}"/lib*/ld-linux-*.so.?; do
     if [[ -x "$l" ]]; then
-        LDSO="$l"
+        LDSO=$(realpath "$l")
         break
     fi
 done
