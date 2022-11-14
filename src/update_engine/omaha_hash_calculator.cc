@@ -52,16 +52,8 @@ class ScopedBioHandle {
 };
 
 OmahaHashCalculator::OmahaHashCalculator() : valid_(false) {
-  ctx_ = EVP_MD_CTX_create();
-  valid_ = ctx_ != NULL;
-  LOG_IF(ERROR, !valid_) << "EVP_MD_CTX_create() returned NULL";
-  if (!valid_)
-    return;
-
-  valid_ = EVP_DigestInit_ex(ctx_, EVP_sha256(), NULL) == 1;
-  LOG_IF(ERROR, !valid_) << "EVP_DigestInit_ex() failed";
-  if (!valid_)
-    EVP_MD_CTX_free(ctx_);
+  valid_ = !crypto_hash_sha256_init(&hash_state_);
+  LOG_IF(ERROR, !valid_) << "crypto_hash_sha256_init() failed";
 }
 
 // Update is called with all of the data that should be hashed in order.
@@ -69,9 +61,11 @@ OmahaHashCalculator::OmahaHashCalculator() : valid_(false) {
 bool OmahaHashCalculator::Update(const char* data, size_t length) {
   TEST_AND_RETURN_FALSE(valid_);
   TEST_AND_RETURN_FALSE(hash_.empty());
-  static_assert(sizeof(size_t) <= sizeof(unsigned long),
+  static_assert(sizeof(size_t) <= sizeof(unsigned long long),
                 "length param may be truncated in SHA256_Update");
-  TEST_AND_RETURN_FALSE(EVP_DigestUpdate(ctx_, data, length) == 1);
+
+  TEST_AND_RETURN_FALSE(crypto_hash_sha256_update(&hash_state_,
+    reinterpret_cast<const unsigned char *>(data), length) == 0);
   return true;
 }
 
@@ -176,14 +170,13 @@ bool OmahaHashCalculator::Base64Decode(const string& raw_in,
 // Call Finalize() when all data has been passed in. This mostly just
 // calls OpenSSL's SHA256_Final() and then base64 encodes the hash.
 bool OmahaHashCalculator::Finalize() {
-  unsigned int hash_size = EVP_MD_size(EVP_sha256());
-
   TEST_AND_RETURN_FALSE(hash_.empty());
   TEST_AND_RETURN_FALSE(raw_hash_.empty());
-  raw_hash_.resize(hash_size);
+  raw_hash_.resize(crypto_hash_sha256_BYTES);
+
   TEST_AND_RETURN_FALSE(
-    EVP_DigestFinal_ex(ctx_,
-      reinterpret_cast<unsigned char*>(&raw_hash_[0]), &hash_size) == 1);
+    crypto_hash_sha256_final(&hash_state_, 
+      reinterpret_cast<unsigned char*>(&raw_hash_[0])) == 0);
 
   // Convert raw_hash_ to base64 encoding and store it in hash_.
   return Base64Encode(&raw_hash_[0], raw_hash_.size(), &hash_);
@@ -235,12 +228,12 @@ string OmahaHashCalculator::OmahaHashOfData(const vector<char>& data) {
 }
 
 string OmahaHashCalculator::GetContext() const {
-  return string(reinterpret_cast<const char*>(&ctx_), sizeof(ctx_));
+  return string(reinterpret_cast<const char*>(&hash_state_), sizeof(hash_state_));
 }
 
 bool OmahaHashCalculator::SetContext(const std::string& context) {
-  TEST_AND_RETURN_FALSE(context.size() == sizeof(ctx_));
-  memcpy(&ctx_, context.data(), sizeof(ctx_));
+  TEST_AND_RETURN_FALSE(context.size() == sizeof(hash_state_));
+  memcpy(&hash_state_, context.data(), sizeof(hash_state_));
   return true;
 }
 

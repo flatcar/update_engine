@@ -11,6 +11,7 @@
 
 #include <glog/logging.h>
 #include <openssl/evp.h>
+#include <libsodium/crypto_hash_sha256.h>
 
 #include "macros.h"
 
@@ -94,7 +95,7 @@ class OmahaHashCalculator {
   bool valid_;
 
   // The hash state used by OpenSSL
-  EVP_MD_CTX *ctx_;
+  struct crypto_hash_sha256_state hash_state_;
   DISALLOW_COPY_AND_ASSIGN(OmahaHashCalculator);
 };
 
