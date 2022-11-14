@@ -8,7 +8,7 @@ check_DATA =
 CLEANFILES = $(BUILT_SOURCES) $(check_DATA)
 EXTRA_DIST =
 
-AM_CPPFLAGS = -I$(srcdir)/src -I$(builddir)/src $(GTEST_CPPFLAGS) $(GMOCK_CPPFLAGS)
+AM_CPPFLAGS = -I$(srcdir)/src -I$(builddir)/src -I$(srcdir)/src/libsodium $(GTEST_CPPFLAGS) $(GMOCK_CPPFLAGS)
 AM_CFLAGS = -fno-exceptions \
 	    -fno-strict-aliasing \
 	    -Wall \
@@ -74,6 +74,7 @@ libupdate_engine_a_SOURCES = \
 	src/strings/string_number_conversions.cc \
 	src/strings/string_printf.cc \
 	src/strings/string_split.cc \
+	src/libsodium/hash_sha256_cp.c \
 	src/update_engine/action_processor.cc \
 	src/update_engine/bzip.cc \
 	src/update_engine/bzip_extent_writer.cc \
