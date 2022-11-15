@@ -204,7 +204,6 @@ static void SignGeneratedShellPayload(SignatureTest signature_test,
   // Pad the hash
   vector<char> hash;
   ASSERT_TRUE(utils::ReadFile(hash_file, &hash));
-  ASSERT_TRUE(PayloadSigner::PadRSA2048SHA256Hash(&hash));
   ASSERT_TRUE(WriteFileVector(hash_file, hash));
 
   string sig_file;
