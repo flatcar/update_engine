@@ -179,7 +179,7 @@ bool PayloadSigner::SignHash(const vector<char>& hash,
   // We expect unpadded SHA256 hash coming in
   TEST_AND_RETURN_FALSE(hash.size() == 32);
   vector<char> padded_hash(hash);
-  PadRSA2048SHA256Hash(&padded_hash);
+  //PadRSA2048SHA256Hash(&padded_hash);
   TEST_AND_RETURN_FALSE(utils::WriteFile(hash_path.c_str(),
                                          padded_hash.data(),
                                          padded_hash.size()));
@@ -309,7 +309,7 @@ bool PayloadSigner::GetRawHashFromSignature(
   EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pkey, NULL);
   if (!ctx
       || EVP_PKEY_verify_recover_init(ctx) <= 0
-      || EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_NO_PADDING) <= 0
+      || EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0
       || EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) <= 0) {
     LOG(ERROR) << "Couldn't initialise EVP_PKEY_CTX";
     EVP_PKEY_free(pkey);
@@ -359,7 +359,7 @@ bool PayloadSigner::VerifySignedPayload(const std::string& payload_path,
   vector<char> hash;
   TEST_AND_RETURN_FALSE(OmahaHashCalculator::RawHashOfBytes(
       payload.data(), metadata_size + manifest.signatures_offset(), &hash));
-  PadRSA2048SHA256Hash(&hash);
+  //PadRSA2048SHA256Hash(&hash);
   TEST_AND_RETURN_FALSE(hash == signed_hash);
   return true;
 }

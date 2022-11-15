@@ -361,7 +361,7 @@ ActionExitCode PayloadProcessor::VerifyPayload() {
   TEST_AND_RETURN_VAL(kActionCodeDownloadPayloadPubKeyVerificationError,
                       signed_hasher.Finalize());
   vector<char> hash_data = signed_hasher.raw_hash();
-  PayloadSigner::PadRSA2048SHA256Hash(&hash_data);
+  //PayloadSigner::PadRSA2048SHA256Hash(&hash_data);
   TEST_AND_RETURN_VAL(kActionCodeDownloadPayloadPubKeyVerificationError,
                       !hash_data.empty());
   if (hash_data != signed_hash_data) {
