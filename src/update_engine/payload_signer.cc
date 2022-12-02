@@ -132,7 +132,7 @@ bool PayloadSigner::SignHash(const vector<char>& hash,
 
   // This runs on the server, so it's okay to cop out and call openssl
   // executable rather than properly use the library
-  vector<string> cmd = {"openssl", "rsautl", "-raw", "-sign",
+  vector<string> cmd = {"openssl", "pkeyutl", "-sign", "-pkeyopt", "digest:sha256", "-pkeyopt", "rsa_padding_mode:pkcs1",
                         "-inkey", private_key_path,
                         "-in", hash_path,
                         "-out", sig_path};

@@ -211,7 +211,7 @@ static void SignGeneratedShellPayload(SignatureTest signature_test,
   ScopedPathUnlinker sig_unlinker(sig_file);
   ASSERT_EQ(0,
             System(StringPrintf(
-                "openssl rsautl -raw -sign -inkey %s -in %s -out %s",
+                "openssl pkeyutl -sign -pkeyopt digest:sha256 -pkeyopt rsa_padding_mode:pkcs1 -inkey %s -in %s -out %s",
                 private_key_path.c_str(),
                 hash_file.c_str(),
                 sig_file.c_str())));
@@ -222,7 +222,7 @@ static void SignGeneratedShellPayload(SignatureTest signature_test,
       signature_test == kSignatureGeneratedShellRotateCl2) {
     ASSERT_EQ(0,
               System(StringPrintf(
-                  "openssl rsautl -raw -sign -inkey %s -in %s -out %s",
+                  "openssl pkeyutl -sign -pkeyopt digest:sha256 -pkeyopt rsa_padding_mode:pkcs1 -inkey %s -in %s -out %s",
                   kUnittestPrivateKey2Path,
                   hash_file.c_str(),
                   sig_file2.c_str())));
