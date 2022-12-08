@@ -6,6 +6,7 @@
 
 #include <glog/logging.h>
 #include <openssl/pem.h>
+#include <openssl/evp.h>
 
 #include "update_engine/delta_diff_generator.h"
 #include "update_engine/delta_metadata.h"
@@ -22,59 +23,6 @@ namespace chromeos_update_engine {
 const uint32_t kSignatureMessageCurrentVersion = 2;
 
 namespace {
-
-// The following is a standard PKCS1-v1_5 padding for SHA256 signatures, as
-// defined in RFC3447. It is prepended to the actual signature (32 bytes) to
-// form a sequence of 256 bytes (2048 bits) that is amenable to RSA signing. The
-// padded hash will look as follows:
-//
-//    0x00 0x01 0xff ... 0xff 0x00  ASN1HEADER  SHA256HASH
-//   |--------------205-----------||----19----||----32----|
-//
-// where ASN1HEADER is the ASN.1 description of the signed data. The complete 51
-// bytes of actual data (i.e. the ASN.1 header complete with the hash) are
-// packed as follows:
-//
-//  SEQUENCE(2+49) {
-//   SEQUENCE(2+13) {
-//    OBJECT(2+9) id-sha256
-//    NULL(2+0)
-//   }
-//   OCTET STRING(2+32) <actual signature bytes...>
-//  }
-const unsigned char kRSA2048SHA256Padding[] = {
-  // PKCS1-v1_5 padding
-  0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-  0xff, 0xff, 0xff, 0xff, 0x00,
-  // ASN.1 header
-  0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
-  0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05,
-  0x00, 0x04, 0x20,
-};
 
 // Given raw |signatures|, packs them into a protobuf and serializes it into a
 // binary blob. Returns true on success, false otherwise.
@@ -178,14 +126,13 @@ bool PayloadSigner::SignHash(const vector<char>& hash,
   // We expect unpadded SHA256 hash coming in
   TEST_AND_RETURN_FALSE(hash.size() == 32);
   vector<char> padded_hash(hash);
-  PadRSA2048SHA256Hash(&padded_hash);
   TEST_AND_RETURN_FALSE(utils::WriteFile(hash_path.c_str(),
                                          padded_hash.data(),
                                          padded_hash.size()));
 
   // This runs on the server, so it's okay to cop out and call openssl
   // executable rather than properly use the library
-  vector<string> cmd = {"openssl", "rsautl", "-raw", "-sign",
+  vector<string> cmd = {"openssl", "pkeyutl", "-sign", "-pkeyopt", "digest:sha256", "-pkeyopt", "rsa_padding_mode:pkcs1",
                         "-inkey", private_key_path,
                         "-in", hash_path,
                         "-out", sig_path};
@@ -292,27 +239,44 @@ bool PayloadSigner::GetRawHashFromSignature(
   }
 
   char dummy_password[] = { ' ', 0 };  // Ensure no password is read from stdin.
-  RSA* rsa = PEM_read_RSA_PUBKEY(fpubkey, NULL, NULL, dummy_password);
+  EVP_PKEY* pkey = PEM_read_PUBKEY(fpubkey, NULL, NULL, dummy_password);
   fclose(fpubkey);
-  TEST_AND_RETURN_FALSE(rsa != NULL);
-  unsigned int keysize = RSA_size(rsa);
+  TEST_AND_RETURN_FALSE(pkey != NULL);
+  size_t keysize = EVP_PKEY_get_size(pkey);
   if (sig_data.size() > 2 * keysize) {
     LOG(ERROR) << "Signature size is too big for public key size.";
-    RSA_free(rsa);
+    EVP_PKEY_free(pkey);
     return false;
   }
 
-  // Decrypts the signature.
   vector<char> hash_data(keysize);
-  int decrypt_size = RSA_public_decrypt(
-      sig_data.size(),
-      reinterpret_cast<const unsigned char*>(sig_data.data()),
+
+  // Decrypts the signature.
+  EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pkey, NULL);
+  if (!ctx
+      || EVP_PKEY_verify_recover_init(ctx) <= 0
+      || EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0
+      || EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256()) <= 0) {
+    LOG(ERROR) << "Couldn't initialise EVP_PKEY_CTX";
+    EVP_PKEY_free(pkey);
+    return false;
+  }
+
+  size_t decrypt_size = keysize;
+
+  if (EVP_PKEY_verify_recover(ctx,
       reinterpret_cast<unsigned char*>(hash_data.data()),
-      rsa,
-      RSA_NO_PADDING);
-  RSA_free(rsa);
+      &decrypt_size,
+      reinterpret_cast<const unsigned char*>(sig_data.data()),
+      sig_data.size()) <= 0 ) {
+    decrypt_size = 0;
+  }
+
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_free(pkey);
+
   TEST_AND_RETURN_FALSE(decrypt_size > 0 &&
-                        decrypt_size <= static_cast<int>(hash_data.size()));
+                        (ssize_t) decrypt_size <= static_cast<int>(hash_data.size()));
   hash_data.resize(decrypt_size);
   out_hash_data->swap(hash_data);
   return true;
@@ -341,7 +305,6 @@ bool PayloadSigner::VerifySignedPayload(const std::string& payload_path,
   vector<char> hash;
   TEST_AND_RETURN_FALSE(OmahaHashCalculator::RawHashOfBytes(
       payload.data(), metadata_size + manifest.signatures_offset(), &hash));
-  PadRSA2048SHA256Hash(&hash);
   TEST_AND_RETURN_FALSE(hash == signed_hash);
   return true;
 }
@@ -411,16 +374,6 @@ bool PayloadSigner::AddSignatureToPayload(
   TEST_AND_RETURN_FALSE(utils::WriteFile(signed_payload_path.c_str(),
                                          payload.data(),
                                          payload.size()));
-  return true;
-}
-
-bool PayloadSigner::PadRSA2048SHA256Hash(std::vector<char>* hash) {
-  TEST_AND_RETURN_FALSE(hash->size() == 32);
-  hash->insert(hash->begin(),
-               reinterpret_cast<const char*>(kRSA2048SHA256Padding),
-               reinterpret_cast<const char*>(kRSA2048SHA256Padding +
-                                             sizeof(kRSA2048SHA256Padding)));
-  TEST_AND_RETURN_FALSE(hash->size() == 256);
   return true;
 }
 

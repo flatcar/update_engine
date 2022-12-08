@@ -5,6 +5,7 @@
 #include <gflags/gflags.h>
 #include <glib.h>
 #include <glog/logging.h>
+#include <sodium.h>
 
 #include "update_engine/certificate_checker.h"
 #include "update_engine/dbus_constants.h"
@@ -74,6 +75,8 @@ void SetupDbusService(UpdateEngineService* service) {
 }  // namespace chromeos_update_engine
 
 int main(int argc, char** argv) {
+  PLOG_IF(FATAL, sodium_init() < 0 ) << "the cryptographic lib couldn't be initialized; it is not safe to use";
+
   // Disable glog's default behavior of logging to files.
   FLAGS_logtostderr = true;
   GFLAGS_NAMESPACE::ParseCommandLineFlags(&argc, &argv, true);

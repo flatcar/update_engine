@@ -130,7 +130,6 @@ TEST(PayloadSignerTest, VerifySignatureTest) {
   vector<char> padded_hash_data(reinterpret_cast<const char *>(kDataHash),
                                 reinterpret_cast<const char *>(kDataHash +
                                                          sizeof(kDataHash)));
-  PayloadSigner::PadRSA2048SHA256Hash(&padded_hash_data);
   ASSERT_EQ(padded_hash_data.size(), hash_data.size());
   for (size_t i = 0; i < padded_hash_data.size(); i++) {
     EXPECT_EQ(padded_hash_data[i], hash_data[i]);

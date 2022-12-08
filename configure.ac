@@ -81,6 +81,7 @@ PKG_CHECK_MODULES([DEPS],
                    libcrypto
                    libcurl
                    libglog
+                   libsodium
                    libssl
                    libxml-2.0
                    protobuf])

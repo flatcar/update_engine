@@ -113,13 +113,6 @@ class PayloadSigner {
                                   const std::string& public_key_path,
                                   uint32_t client_key_check_version);
 
-  // Pads a SHA256 hash so that it may be encrypted/signed with RSA2048
-  // using the PKCS#1 v1.5 scheme.
-  // hash should be a pointer to vector of exactly 256 bits. The vector
-  // will be modified in place and will result in having a length of
-  // 2048 bits. Returns true on success, false otherwise.
-  static bool PadRSA2048SHA256Hash(std::vector<char>* hash);
-
   // Reads the payload from the given |payload_path| into the |out_payload|
   // vector. It also parses the manifest protobuf in the payload and returns it
   // in |out_manifest| along with the size of the entire metadata in

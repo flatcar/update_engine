@@ -189,7 +189,7 @@ void CreateEmptyExtImageAtPath(const string& path,
   EXPECT_EQ(0, System(StringPrintf("dd if=/dev/zero of=%s"
                                    " seek=%zu bs=1 count=1",
                                    path.c_str(), size)));
-  EXPECT_EQ(0, System(StringPrintf("mkfs.ext2 -b %d -F %s",
+  EXPECT_EQ(0, System(StringPrintf("mkfs.ext2 -b %d -F %s -I 128",
                                    block_size, path.c_str())));
 }
 
