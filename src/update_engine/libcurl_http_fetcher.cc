@@ -152,11 +152,19 @@ void LibcurlHttpFetcher::SetCurlOptionsForHttp() {
   if (!auth_user_.empty()) {
     LOG(INFO) << "(This is not HTTPS, ignoring HTTP Auth credentials)";
   }
+#if (LIBCURL_VERSION_MAJOR > 7) || ((LIBCURL_VERSION_MAJOR == 7) && (LIBCURL_VERSION_MINOR >= 85))
+  CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_PROTOCOLS_STR, "http"),
+           CURLE_OK);
+  CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_REDIR_PROTOCOLS_STR,
+                            "http"),
+           CURLE_OK);
+#else
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_PROTOCOLS, CURLPROTO_HTTP),
            CURLE_OK);
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_REDIR_PROTOCOLS,
                             CURLPROTO_HTTP),
            CURLE_OK);
+#endif
 }
 
 // Security lock-down in official builds: makes sure that peer certificate
@@ -168,11 +176,19 @@ void LibcurlHttpFetcher::SetCurlOptionsForHttps() {
            CURLE_OK);
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_CAPATH, kCACertificatesPath),
            CURLE_OK);
+#if (LIBCURL_VERSION_MAJOR > 7) || ((LIBCURL_VERSION_MAJOR == 7) && (LIBCURL_VERSION_MINOR >= 85))
+  CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_PROTOCOLS_STR, "https"),
+           CURLE_OK);
+  CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_REDIR_PROTOCOLS_STR,
+                            "https"),
+           CURLE_OK);
+#else
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS),
            CURLE_OK);
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_REDIR_PROTOCOLS,
                             CURLPROTO_HTTPS),
            CURLE_OK);
+#endif
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_SSL_CIPHER_LIST, "HIGH:!ADH"),
            CURLE_OK);
   CHECK_EQ(curl_easy_setopt(curl_handle_, CURLOPT_SSLVERSION,
@@ -328,13 +344,12 @@ size_t LibcurlHttpFetcher::LibcurlWrite(void *ptr, size_t size, size_t nmemb) {
 
   sent_byte_ = true;
   {
-    double transfer_size_double;
+    curl_off_t download_transfer_size;
     CHECK_EQ(curl_easy_getinfo(curl_handle_,
-                               CURLINFO_CONTENT_LENGTH_DOWNLOAD,
-                               &transfer_size_double), CURLE_OK);
-    off_t new_transfer_size = static_cast<off_t>(transfer_size_double);
-    if (new_transfer_size > 0) {
-      transfer_size_ = resume_offset_ + new_transfer_size;
+                               CURLINFO_CONTENT_LENGTH_DOWNLOAD_T,
+                               &download_transfer_size), CURLE_OK);
+    if (download_transfer_size > 0) {
+      transfer_size_ = resume_offset_ + download_transfer_size;
     }
   }
   bytes_downloaded_ += payload_size;
