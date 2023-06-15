@@ -1,0 +1,150 @@
+#!/bin/bash
+set -euo pipefail
+
+CHECKINPUT=0
+SCRIPTFOLDER="$(dirname "$(readlink -f "$0")")"
+
+if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  echo "Usage: $0 PUBKEY PAYLOAD OUTPUT [KERNELOUTPUT]"
+  echo "Decodes a payload, writing the decoded payload to stdout and payload information to stderr"
+  echo "Only one optional kernel payload is supported (the output file will be zero-sized if no payload was found)."
+  echo "Only a signle signature is supported as only one pubkey is accepted and in the multi-signature case only the second signature is looked at."
+  echo "Pass CHECKINPUT=1 to process the inline checksums in addition to the final checksum."
+  exit 1
+fi
+
+PUBKEY="$1"
+FILE="$2"
+PARTOUT="$3"
+KERNEL="${4-}"
+
+# The format is documented in src/update_engine/update_metadata.proto
+# The header itself is not a protobuf and we can extract the manifest protobuf size as big endian uint64 from offset 12 and convert it to a decimal string
+MLEN=$(dd status=none bs=1 skip=12 count=8 if="${FILE}" | od --endian=big -An -vtu8 -w1024 | tr -d ' ')
+
+# The manifest starts at offset 20 (with tail we do a +1 compared to dd) and we feed it into protoc for decoding (we assume that the text output format is stable)
+DESC=$(protoc --decode=chromeos_update_engine.DeltaArchiveManifest --proto_path "${SCRIPTFOLDER}"/src/update_engine "${SCRIPTFOLDER}"/src/update_engine/update_metadata.proto < <({ tail -c +21 "${FILE}" || true ; } |head -c "${MLEN}"))
+
+echo "${DESC}" >&2
+
+# Truncate
+true > "${PARTOUT}"
+if [ "${KERNEL}" != "" ]; then
+  true > "${KERNEL}"
+fi
+
+PARALLEL=$(nproc)
+RUNNING=0
+# MODE is the current parsing context, OUT is either PARTOUT or KERNEL
+# A new context/mode should reset the state variables it expects to get set (e.g., DATAHASH, or SIZE and HASH)
+# FINALSIZE/-HASH and KERNELSIZE/-HASH store the section values for later
+MODE="" OUT="" CAT="cat" OFFSET=0 LENGTH=0 START=0 NUM_BLOCKS=0 DATAHASH="" HASH="" SIZE=0 FINALSIZE=0 FINALHASH="" KERNELSIZE=0 KERNELHASH="" SIGOFFSET=0 SIGSIZE=0
+while IFS= read -r LINE; do
+  LINE=$(echo "${LINE}" | sed 's/^ *//g')
+  case "${LINE}" in
+    "partition_operations {") MODE="partition_operations" DATAHASH="" OUT="${PARTOUT}" ;; # Each of these sections has a part of the split payload
+    "type: REPLACE_BZ") CAT="bzcat" ;; # The payload part is compressed if it reduces the size
+    "type: REPLACE") CAT="cat" ;;
+    "data_offset:"*) OFFSET=$(echo "${LINE}" | cut -d : -f 2 | tr -d ' ') ;; # Read pointers into the payload, in bytes
+    "data_length:"*) LENGTH=$(echo "${LINE}" | cut -d : -f 2 | tr -d ' ') ;;
+    "start_block:"*) START=$(echo "${LINE}" | cut -d : -f 2 | tr -d ' ') ;; # Part of dst_extents, write pointer for the target, in blocks
+    "data_sha256_hash:"*) DATAHASH=$(echo "${LINE}" | cut -d '"' -f 2- | head -c-2 | sed 's/%/%%/g') ;; # Expected to be the last entry,
+                          # almost printf-able but we have to escape % and truncate the closing quote because we can't split by quotes as it may contain them
+    "num_blocks:"*) NUM_BLOCKS=$(echo "${LINE}" | cut -d : -f 2 | tr -d ' ') ;; # Part of dst_extents, not used because dd doesn't need it
+    "block_size:"*) ;; # Comes after partition_operations, assumed to be 4096, not checked
+    "signatures_offset:"*) SIGOFFSET=$(echo "${LINE}" | cut -d : -f 2 | tr -d ' ') ;;
+    "signatures_size:"*) SIGSIZE=$(echo "${LINE}" | cut -d : -f 2 | tr -d ' ') ;;
+    "dst_extents {") ;; # Part of partition_operations or operations
+    "noop_operations {") MODE="noop_operations" DATAHASH="" OUT="" ;; # Comes after partition_operations, ignored
+    "new_partition_info {") MODE="new_partition_info" SIZE=0 HASH="" OUT="" ;;
+    "hash:"*) HASH=$(echo "${LINE}" | cut -d '"' -f 2- | head -c-2 | sed 's/%/%%/g') ;; # Part of new_partition_info
+    "size:"*) SIZE=$(echo "${LINE}" | cut -d : -f 2 | tr -d ' ') ;;
+    "new_info {") MODE="new_info" SIZE=0 HASH="" OUT="" ;;
+    "procedures {") MODE="procedures" DATAHASH="" OUT="" ;; # Note that only one kernel is supported and nothing else
+    "operations {") MODE="operations" DATAHASH="" ;; # Nested in "procedures", each of these sections has a part of the split payload
+    "type: KERNEL") if [ "${KERNEL}" != "" ]; then OUT="${KERNEL}" ; fi ;;
+    "}") ;;
+    *) echo "unmatched: $LINE" >&2 ;;
+  esac
+  if [ "${OUT}" != "" ] && [ "${DATAHASH}" != "" ]; then
+    (
+      # The payload data split in parts starts after the head and the manifest, and from there we have the variable offset for each part
+      { { tail -c +$((21 + MLEN + OFFSET)) "${FILE}" || true ; } | head -c "${LENGTH}" | "${CAT}" | dd status=none bs=4096 seek="${START}" of="${OUT}" ; } || { echo "Write error" >&2 ; exit 1 ; }
+      # Each part has a checksum but since we also have one at the end it's not really that meaningful to check, so only done conditionally
+      if [ "${CHECKINPUT}" = 1 ] && [ "$({ tail -c +$((21 + MLEN + OFFSET)) "${FILE}" || true ; } | head -c "${LENGTH}" | sha256sum | cut -d ' ' -f 1)" != "$(printf -- "${DATAHASH}" | od -An -vtx1 -w1024 | tr -d ' ')" ]; then
+        echo "Data hash mismatch" >&2
+        exit 1 # Script will continue and fail at the end
+      fi
+    ) &
+    DATAHASH=""
+    RUNNING=$((RUNNING + 1))
+  fi
+  if [ "${RUNNING}" = "${PARALLEL}" ]; then
+    wait
+    RUNNING=0
+  fi
+  if [ "${MODE}" = "new_partition_info" ] && [ "${SIZE}" != 0 ]; then
+    FINALSIZE="${SIZE}"
+  fi
+  if [ "${MODE}" = "new_partition_info" ] && [ "${HASH}" != "" ]; then
+    FINALHASH="${HASH}"
+  fi
+  if [ "${MODE}" = "new_info" ] && [ "${SIZE}" != 0 ]; then
+    KERNELSIZE="${SIZE}"
+  fi
+  if [ "${MODE}" = "new_info" ] && [ "${HASH}" != "" ]; then
+    KERNELHASH="${HASH}"
+  fi
+done <<< "${DESC}"
+wait
+
+if [ "$(stat '-c%s' "${PARTOUT}")" != "${FINALSIZE}" ]; then
+  echo "Size mismatch" >&2
+  exit 1
+fi
+if [ "$(printf -- "${FINALHASH}" | od -An -vtx1 -w1024 | tr -d ' ')" != "$(sha256sum "${PARTOUT}" | cut -d ' ' -f 1)" ]; then
+  echo "Hash mismatch" >&2
+  exit 1
+fi
+if [ "${KERNEL}" != "" ] && [ "$(stat '-c%s' "${KERNEL}")" != "${KERNELSIZE}" ]; then
+  echo "Kernel size mismatch" >&2
+  exit 1
+fi
+if [ "${KERNEL}" != "" ] && [ "$(printf -- "${KERNELHASH}" | od -An -vtx1 -w1024 | tr -d ' ')" != "$(sha256sum "${KERNEL}" | cut -d ' ' -f 1)" ]; then
+  echo "Kernel hash mismatch" >&2
+  exit 1
+fi
+
+# The signature protobuf message is at the signature offset
+# Decoding the "data" field caues some troubles and needs a workaround below for the dev key
+SIGDESC=$(protoc --decode=chromeos_update_engine.Signatures --proto_path "${SCRIPTFOLDER}"/src/update_engine "${SCRIPTFOLDER}"/src/update_engine/update_metadata.proto < <({ tail -c +$((21 + MLEN + SIGOFFSET)) "${FILE}" || true ; } |head -c "${SIGSIZE}"))
+echo "${SIGDESC}" >&2
+VERSION=2 # Init for the single-signature case, in the many-signature case the first signature ("version 1" but better would be "number 1") is,
+# at least for Flatcar production, a dummy and parsing it overwrites this variable with 1 and it will be ignored,
+# the second signature is "version 2" and the one we want to check. Even if only one signature is there it becomes "version 2",
+# see https://github.com/flatcar/update_engine/blob/c6f566d47d8949632f7f43871eb8d5c625af3209/src/update_engine/payload_signer.cc#L33
+while IFS= read -r LINE; do
+  LINE=$(echo "${LINE}" | sed 's/^ *//g')
+  case "${LINE}" in
+  "version:"*) VERSION=$(echo "${LINE}" | cut -d : -f 2 | tr -d ' ') ;;
+  "data:"*)
+            SIGDATA=$(echo "${LINE}" | cut -d '"' -f 2- | head -c-2 | sed 's/%/%%/g')
+            # This is a workaround for the dev-key vs prod-key case: sed '/signatures {/d' | sed '/  version: 2/d'
+            SIGHEX=$(printf -- "${SIGDATA}" | sed '/signatures {/d' | sed '/  version: 2/d' | openssl rsautl -verify -pubin -inkey "${PUBKEY}" -raw | tail -c 32 | od -An -vtx1  -w1024 | tr -d ' ')
+            # The raw output instead of asn1parse is used to easily extract the sha256 checksum (done by tail -c 32)
+            # We also calculate the payload hash that the signature was done for, note that it's of course not the whole file but only up to the attached signature itself
+            PAYLOADHASH=$(head -c "$((20 + MLEN + SIGOFFSET))" "${FILE}" | sha256sum | cut -d ' ' -f 1)
+            if [ "${VERSION}" = 2 ] && [ "${SIGHEX}" != "${PAYLOADHASH}" ]; then
+              echo "Signature error" >&2
+              exit 1
+            elif [ "${VERSION}" != 2 ]; then
+              # For Flatcar production this is a dummy signature with a random key,
+              # see https://github.com/flatcar/flatcar-build-scripts/blob/821d8da19567e3d1a29dc24f8c822f67df6a5e02/generate_payload#L384
+              echo "Unprocessed 'version ${VERSION}' signature (Payload hash: ${PAYLOADHASH}, SIGDATA: ${SIGDATA})" >&2
+            fi
+            ;;
+  *) ;;
+  esac
+done <<< "${SIGDESC}"
+
+echo "Success" >&2
