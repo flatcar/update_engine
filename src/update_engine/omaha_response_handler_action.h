@@ -30,8 +30,6 @@ class ActionTraits<OmahaResponseHandlerAction> {
 
 class OmahaResponseHandlerAction : public Action<OmahaResponseHandlerAction> {
  public:
-  static const char kDeadlineFile[];
-
   OmahaResponseHandlerAction(SystemState* system_state);
   typedef ActionTraits<OmahaResponseHandlerAction>::InputObjectType
       InputObjectType;

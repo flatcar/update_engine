@@ -42,7 +42,6 @@ struct OmahaResponse {
 
   std::string more_info_url;
   std::string hash;
-  std::string deadline;
   off_t size;
   // The number of URL-related failures to tolerate before moving on to the
   // next URL in the current pass. This is a configurable value from the

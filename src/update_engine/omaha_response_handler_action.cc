@@ -18,9 +18,6 @@ using std::string;
 
 namespace chromeos_update_engine {
 
-const char OmahaResponseHandlerAction::kDeadlineFile[] =
-    "/tmp/update-check-response-deadline";
-
 OmahaResponseHandlerAction::OmahaResponseHandlerAction(
     SystemState* system_state)
     : system_state_(system_state),
@@ -84,18 +81,6 @@ void OmahaResponseHandlerAction::PerformAction() {
     SetOutputObject(install_plan_);
   LOG(INFO) << "Using this install plan:";
   install_plan_.Dump();
-
-  // Send the deadline data (if any) to Chrome through a file. This is a pretty
-  // hacky solution but should be OK for now.
-  //
-  // TODO(petkov): Rearchitect this to avoid communication through a
-  // file. Ideallly, we would include this information in D-Bus's GetStatus
-  // method and UpdateStatus signal. A potential issue is that update_engine may
-  // be unresponsive during an update download.
-  utils::WriteFile(kDeadlineFile,
-                   response.deadline.data(),
-                   response.deadline.size());
-  chmod(kDeadlineFile, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
   completer.set_code(kActionCodeSuccess);
 }

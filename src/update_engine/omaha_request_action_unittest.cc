@@ -75,8 +75,7 @@ string GetUpdateResponse2(const string& app_id,
                           const string& filename,
                           const string& hash,
                           const string& needsadmin,
-                          const string& size,
-                          const string& deadline) {
+                          const string& size) {
   string response =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?><response "
       "protocol=\"3.0\">"
@@ -93,7 +92,6 @@ string GetUpdateResponse2(const string& app_id,
       "IsDeltaPayload=\"true\" "
       "sha256=\"" + hash + "\" "
       "needsadmin=\"" + needsadmin + "\" " +
-      (deadline.empty() ? "" : ("deadline=\"" + deadline + "\" ")) +
       "/></actions></manifest></updatecheck></app></response>";
   LOG(INFO) << "Response = " << response;
   return response;
@@ -107,8 +105,7 @@ string GetUpdateResponse(const string& app_id,
                          const string& filename,
                          const string& hash,
                          const string& needsadmin,
-                         const string& size,
-                         const string& deadline) {
+                         const string& size) {
   return GetUpdateResponse2(app_id,
                             display_version,
                             more_info_url,
@@ -117,8 +114,7 @@ string GetUpdateResponse(const string& app_id,
                             filename,
                             hash,
                             needsadmin,
-                            size,
-                            deadline);
+                            size);
 }
 }  // namespace {}
 
@@ -221,8 +217,7 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
                                         "file.signed", // file name
                                         "HASH1234=",  // checksum
                                         "false",  // needs admin
-                                        "123",  // size
-                                        "20101020"),  // deadline
+                                        "123"),  // size
                       -1,
                       false,  // ping_only
                       kActionCodeSuccess,
@@ -237,7 +232,6 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
   EXPECT_EQ(123, response.size);
   EXPECT_FALSE(response.needs_admin);
   EXPECT_TRUE(response.prompt);
-  EXPECT_EQ("20101020", response.deadline);
 }
 
 TEST(OmahaRequestActionTest, NoOutputPipeTest) {
@@ -379,7 +373,6 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
   EXPECT_EQ(587, response.size);
   EXPECT_TRUE(response.needs_admin);
   EXPECT_FALSE(response.prompt);
-  EXPECT_TRUE(response.deadline.empty());
 }
 
 TEST(OmahaRequestActionTest, ConcatUrlSlashTest) {
@@ -515,8 +508,7 @@ TEST(OmahaRequestActionTest, XmlDecodeTest) {
                                         "file.signed", // file name
                                         "HASH1234=", // checksum
                                         "false",  // needs admin
-                                        "123",  // size
-                                        "&lt;20110101"),  // deadline
+                                        "123"),  // size
                       -1,
                       false,  // ping_only
                       kActionCodeSuccess,
@@ -525,7 +517,6 @@ TEST(OmahaRequestActionTest, XmlDecodeTest) {
 
   EXPECT_EQ(response.more_info_url, "testthe<url");
   EXPECT_EQ(response.payload_urls[0], "testthe&codebase/file.signed");
-  EXPECT_EQ(response.deadline, "<20110101");
 }
 
 TEST(OmahaRequestActionTest, ParseIntTest) {
@@ -542,8 +533,7 @@ TEST(OmahaRequestActionTest, ParseIntTest) {
                                         "HASH1234=", // checksum
                                         "false",  // needs admin
                                         // overflows int32:
-                                        "123123123123123",  // size
-                                        "deadline"),
+                                        "123123123123123"),  // size
                       -1,
                       false,  // ping_only
                       kActionCodeSuccess,
