@@ -87,7 +87,6 @@ TEST_F(OmahaResponseHandlerActionTest, SimpleTest) {
     in.payload_urls.push_back("http://foo/the_update_a.b.c.d.tgz");
     in.hash = "HASH+";
     in.size = 12;
-    in.needs_admin = true;
     InstallPlan install_plan;
     EXPECT_TRUE(DoTest(in, "/dev/sda3", &install_plan));
     EXPECT_EQ(in.payload_urls[0], install_plan.download_url);
@@ -102,7 +101,6 @@ TEST_F(OmahaResponseHandlerActionTest, SimpleTest) {
     in.payload_urls.push_back("http://foo/the_update_a.b.c.d.tgz");
     in.hash = "HASHj+";
     in.size = 12;
-    in.needs_admin = true;
     InstallPlan install_plan;
     EXPECT_TRUE(DoTest(in, "/dev/sda4", &install_plan));
     EXPECT_EQ(in.payload_urls[0], install_plan.download_url);
@@ -117,7 +115,6 @@ TEST_F(OmahaResponseHandlerActionTest, SimpleTest) {
     in.payload_urls.push_back(kLongName);
     in.hash = "HASHj+";
     in.size = 12;
-    in.needs_admin = true;
     InstallPlan install_plan;
     EXPECT_TRUE(DoTest(in, "/dev/sda3", &install_plan));
     EXPECT_EQ(in.payload_urls[0], install_plan.download_url);

@@ -22,7 +22,6 @@ struct OmahaResponse {
         poll_interval(0),
         size(0),
         max_failure_count_per_url(0),
-        needs_admin(false),
         is_delta_payload(false),
         disable_payload_backoff(false) {}
 
@@ -45,7 +44,6 @@ struct OmahaResponse {
   // next URL in the current pass. This is a configurable value from the
   // Omaha Response attribute, if ever we need to fine tune the behavior.
   uint32_t max_failure_count_per_url;
-  bool needs_admin;
 
   // True if the payload described in this response is a delta payload.
   // False if it's a full payload.

@@ -72,7 +72,6 @@ string GetUpdateResponse2(const string& app_id,
                           const string& codebase,
                           const string& filename,
                           const string& hash,
-                          const string& needsadmin,
                           const string& size) {
   string response =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?><response "
@@ -88,7 +87,6 @@ string GetUpdateResponse2(const string& app_id,
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"true\" "
       "sha256=\"" + hash + "\" "
-      "needsadmin=\"" + needsadmin + "\" " +
       "/></actions></manifest></updatecheck></app></response>";
   LOG(INFO) << "Response = " << response;
   return response;
@@ -99,14 +97,12 @@ string GetUpdateResponse(const string& app_id,
                          const string& codebase,
                          const string& filename,
                          const string& hash,
-                         const string& needsadmin,
                          const string& size) {
   return GetUpdateResponse2(app_id,
                             display_version,
                             codebase,
                             filename,
                             hash,
-                            needsadmin,
                             size);
 }
 }  // namespace {}
@@ -207,7 +203,6 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
                                         "http://code/base/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=",  // checksum
-                                        "false",  // needs admin
                                         "123"),  // size
                       -1,
                       false,  // ping_only
@@ -220,7 +215,6 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
   EXPECT_EQ("http://code/base/file.signed", response.payload_urls[0]);
   EXPECT_EQ("HASH1234=", response.hash);
   EXPECT_EQ(123, response.size);
-  EXPECT_FALSE(response.needs_admin);
 }
 
 TEST(OmahaRequestActionTest, NoOutputPipeTest) {
@@ -340,7 +334,6 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"false\" "
       "sha256=\"lkq34j5345\" "
-      "needsadmin=\"true\" "
       "/></actions></manifest></updatecheck></app></response>";
   LOG(INFO) << "Input Response = " << input_response;
 
@@ -358,7 +351,6 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
   EXPECT_EQ("http://missing/field/test/f", response.payload_urls[0]);
   EXPECT_EQ("lkq34j5345", response.hash);
   EXPECT_EQ(587, response.size);
-  EXPECT_TRUE(response.needs_admin);
 }
 
 TEST(OmahaRequestActionTest, ConcatUrlSlashTest) {
@@ -376,7 +368,6 @@ TEST(OmahaRequestActionTest, ConcatUrlSlashTest) {
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"false\" "
       "sha256=\"lkq34j5345\" "
-      "needsadmin=\"true\" "
       "/></actions></manifest></updatecheck></app></response>";
   LOG(INFO) << "Input Response = " << input_response;
 
@@ -490,7 +481,6 @@ TEST(OmahaRequestActionTest, XmlDecodeTest) {
                                         "testthe&amp;codebase/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=", // checksum
-                                        "false",  // needs admin
                                         "123"),  // size
                       -1,
                       false,  // ping_only
@@ -511,7 +501,6 @@ TEST(OmahaRequestActionTest, ParseIntTest) {
                                         "thecodebase/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=", // checksum
-                                        "false",  // needs admin
                                         // overflows int32:
                                         "123123123123123"),  // size
                       -1,
