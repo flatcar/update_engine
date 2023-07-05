@@ -41,8 +41,8 @@ static const char* kTagMaxFailureCountPerUrl = "MaxFailureCountPerUrl";
 // Deprecated: "MetadataSize"
 // Deprecated: "MoreInfo"; See https://github.com/google/omaha/blob/main/doc/ServerProtocolV2.md
 // "And on the Mac, the Google Software Update Agent supports the following optional attributes": Prompt, MoreInfo
+// Deprecated: "Prompt"
 static const char* kTagNeedsAdmin = "needsadmin";
-static const char* kTagPrompt = "Prompt";
 static const char* kTagSha256 = "sha256";
 
 namespace {
@@ -593,7 +593,6 @@ bool OmahaRequestAction::ParseParams(xmlDoc* doc,
   // Get the optional properties one by one.
   output_object->needs_admin =
       XmlGetProperty(pie_action_node, kTagNeedsAdmin) == "true";
-  output_object->prompt = XmlGetProperty(pie_action_node, kTagPrompt) == "true";
 
   string max = XmlGetProperty(pie_action_node, kTagMaxFailureCountPerUrl);
   if (!strings::StringToUint(max, &output_object->max_failure_count_per_url))

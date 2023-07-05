@@ -69,7 +69,6 @@ string GetNoUpdateResponse(const string& app_id) {
 
 string GetUpdateResponse2(const string& app_id,
                           const string& display_version,
-                          const string& prompt,
                           const string& codebase,
                           const string& filename,
                           const string& hash,
@@ -86,7 +85,6 @@ string GetUpdateResponse2(const string& app_id,
       "<packages><package hash=\"not-used\" name=\"" + filename +  "\" "
       "size=\"" + size + "\"/></packages>"
       "<actions><action event=\"postinstall\" "
-      "Prompt=\"" + prompt + "\" "
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"true\" "
       "sha256=\"" + hash + "\" "
@@ -98,7 +96,6 @@ string GetUpdateResponse2(const string& app_id,
 
 string GetUpdateResponse(const string& app_id,
                          const string& display_version,
-                         const string& prompt,
                          const string& codebase,
                          const string& filename,
                          const string& hash,
@@ -106,7 +103,6 @@ string GetUpdateResponse(const string& app_id,
                          const string& size) {
   return GetUpdateResponse2(app_id,
                             display_version,
-                            prompt,
                             codebase,
                             filename,
                             hash,
@@ -208,7 +204,6 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "true",  // prompt
                                         "http://code/base/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=",  // checksum
@@ -226,7 +221,6 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
   EXPECT_EQ("HASH1234=", response.hash);
   EXPECT_EQ(123, response.size);
   EXPECT_FALSE(response.needs_admin);
-  EXPECT_TRUE(response.prompt);
 }
 
 TEST(OmahaRequestActionTest, NoOutputPipeTest) {
@@ -343,7 +337,6 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
       "<packages><package hash=\"not-used\" name=\"f\" "
       "size=\"587\"/></packages>"
       "<actions><action event=\"postinstall\" "
-      "Prompt=\"false\" "
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"false\" "
       "sha256=\"lkq34j5345\" "
@@ -366,7 +359,6 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
   EXPECT_EQ("lkq34j5345", response.hash);
   EXPECT_EQ(587, response.size);
   EXPECT_TRUE(response.needs_admin);
-  EXPECT_FALSE(response.prompt);
 }
 
 TEST(OmahaRequestActionTest, ConcatUrlSlashTest) {
@@ -381,7 +373,6 @@ TEST(OmahaRequestActionTest, ConcatUrlSlashTest) {
       "<packages><package hash=\"not-used\" name=\"f\" "
       "size=\"587\"/></packages>"
       "<actions><action event=\"postinstall\" "
-      "Prompt=\"false\" "
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"false\" "
       "sha256=\"lkq34j5345\" "
@@ -496,7 +487,6 @@ TEST(OmahaRequestActionTest, XmlDecodeTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "true",  // prompt
                                         "testthe&amp;codebase/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=", // checksum
@@ -518,7 +508,6 @@ TEST(OmahaRequestActionTest, ParseIntTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "true",  // prompt
                                         "thecodebase/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=", // checksum
