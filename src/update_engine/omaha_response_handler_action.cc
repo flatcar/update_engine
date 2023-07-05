@@ -112,25 +112,8 @@ bool OmahaResponseHandlerAction::GetInstallDev(const std::string& boot_dev,
   return true;
 }
 
-namespace {
-bool IsCrosLegacySystem() {
-  string cmdline;
-  TEST_AND_RETURN_FALSE(
-      files::ReadFileToString(files::FilePath("/proc/cmdline"), &cmdline));
-  return cmdline.find("cros_legacy") != string::npos;
-}
-}  // namespace
-
 bool OmahaResponseHandlerAction::GetKernelPath(const std::string& part_path,
                                                std::string* kernel_path) {
-  // If 'cros_legacy' is in the kernel args we are on an old system
-  // using SYSLINUX style bootloader configuration. Leave the kernel to
-  // the post install script on such systems.
-  if (IsCrosLegacySystem()) {
-    *kernel_path = "";
-    return true;
-  }
-
   files::FilePath coreos_kernel_a = files::FilePath("/boot/coreos/vmlinuz-a");
   files::FilePath coreos_kernel_b = files::FilePath("/boot/coreos/vmlinuz-b");
 
