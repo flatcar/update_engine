@@ -39,7 +39,8 @@ static const char* kTagMaxFailureCountPerUrl = "MaxFailureCountPerUrl";
 // Deprecated: "ManifestSize"
 // Deprecated: "MetadataSignatureRsa"
 // Deprecated: "MetadataSize"
-static const char* kTagMoreInfo = "MoreInfo";
+// Deprecated: "MoreInfo"; See https://github.com/google/omaha/blob/main/doc/ServerProtocolV2.md
+// "And on the Mac, the Google Software Update Agent supports the following optional attributes": Prompt, MoreInfo
 static const char* kTagNeedsAdmin = "needsadmin";
 static const char* kTagPrompt = "Prompt";
 static const char* kTagSha256 = "sha256";
@@ -590,7 +591,6 @@ bool OmahaRequestAction::ParseParams(xmlDoc* doc,
   }
 
   // Get the optional properties one by one.
-  output_object->more_info_url = XmlGetProperty(pie_action_node, kTagMoreInfo);
   output_object->needs_admin =
       XmlGetProperty(pie_action_node, kTagNeedsAdmin) == "true";
   output_object->prompt = XmlGetProperty(pie_action_node, kTagPrompt) == "true";

@@ -85,7 +85,6 @@ TEST_F(OmahaResponseHandlerActionTest, SimpleTest) {
     in.update_exists = true;
     in.display_version = "a.b.c.d";
     in.payload_urls.push_back("http://foo/the_update_a.b.c.d.tgz");
-    in.more_info_url = "http://more/info";
     in.hash = "HASH+";
     in.size = 12;
     in.needs_admin = true;
@@ -102,7 +101,6 @@ TEST_F(OmahaResponseHandlerActionTest, SimpleTest) {
     in.update_exists = true;
     in.display_version = "a.b.c.d";
     in.payload_urls.push_back("http://foo/the_update_a.b.c.d.tgz");
-    in.more_info_url = "http://more/info";
     in.hash = "HASHj+";
     in.size = 12;
     in.needs_admin = true;
@@ -119,7 +117,6 @@ TEST_F(OmahaResponseHandlerActionTest, SimpleTest) {
     in.update_exists = true;
     in.display_version = "a.b.c.d";
     in.payload_urls.push_back(kLongName);
-    in.more_info_url = "http://more/info";
     in.hash = "HASHj+";
     in.size = 12;
     in.needs_admin = true;

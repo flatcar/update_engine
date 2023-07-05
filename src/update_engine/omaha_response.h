@@ -40,7 +40,6 @@ struct OmahaResponse {
   // URL (i.e. in terms of Omaha XML, each value is a urlBase + packageName)
   std::vector<std::string> payload_urls;
 
-  std::string more_info_url;
   std::string hash;
   off_t size;
   // The number of URL-related failures to tolerate before moving on to the

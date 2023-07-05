@@ -69,7 +69,6 @@ string GetNoUpdateResponse(const string& app_id) {
 
 string GetUpdateResponse2(const string& app_id,
                           const string& display_version,
-                          const string& more_info_url,
                           const string& prompt,
                           const string& codebase,
                           const string& filename,
@@ -87,7 +86,7 @@ string GetUpdateResponse2(const string& app_id,
       "<packages><package hash=\"not-used\" name=\"" + filename +  "\" "
       "size=\"" + size + "\"/></packages>"
       "<actions><action event=\"postinstall\" "
-      "MoreInfo=\"" + more_info_url + "\" Prompt=\"" + prompt + "\" "
+      "Prompt=\"" + prompt + "\" "
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"true\" "
       "sha256=\"" + hash + "\" "
@@ -99,7 +98,6 @@ string GetUpdateResponse2(const string& app_id,
 
 string GetUpdateResponse(const string& app_id,
                          const string& display_version,
-                         const string& more_info_url,
                          const string& prompt,
                          const string& codebase,
                          const string& filename,
@@ -108,7 +106,6 @@ string GetUpdateResponse(const string& app_id,
                          const string& size) {
   return GetUpdateResponse2(app_id,
                             display_version,
-                            more_info_url,
                             prompt,
                             codebase,
                             filename,
@@ -211,7 +208,6 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "http://more/info",
                                         "true",  // prompt
                                         "http://code/base/",  // dl url
                                         "file.signed", // file name
@@ -227,7 +223,6 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
   EXPECT_TRUE(response.update_exists);
   EXPECT_EQ("1.2.3.4", response.display_version);
   EXPECT_EQ("http://code/base/file.signed", response.payload_urls[0]);
-  EXPECT_EQ("http://more/info", response.more_info_url);
   EXPECT_EQ("HASH1234=", response.hash);
   EXPECT_EQ(123, response.size);
   EXPECT_FALSE(response.needs_admin);
@@ -368,7 +363,6 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
   EXPECT_TRUE(response.update_exists);
   EXPECT_EQ("1.0.0.0", response.display_version);
   EXPECT_EQ("http://missing/field/test/f", response.payload_urls[0]);
-  EXPECT_EQ("", response.more_info_url);
   EXPECT_EQ("lkq34j5345", response.hash);
   EXPECT_EQ(587, response.size);
   EXPECT_TRUE(response.needs_admin);
@@ -502,7 +496,6 @@ TEST(OmahaRequestActionTest, XmlDecodeTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "testthe&lt;url",  // more info
                                         "true",  // prompt
                                         "testthe&amp;codebase/",  // dl url
                                         "file.signed", // file name
@@ -515,7 +508,6 @@ TEST(OmahaRequestActionTest, XmlDecodeTest) {
                       &response,
                       NULL));
 
-  EXPECT_EQ(response.more_info_url, "testthe<url");
   EXPECT_EQ(response.payload_urls[0], "testthe&codebase/file.signed");
 }
 
@@ -526,7 +518,6 @@ TEST(OmahaRequestActionTest, ParseIntTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "theurl",  // more info
                                         "true",  // prompt
                                         "thecodebase/",  // dl url
                                         "file.signed", // file name
