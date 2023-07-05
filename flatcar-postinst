@@ -100,25 +100,6 @@ if [[ -x "${OEM_MNT}/bin/oem-postinst" ]]; then
     "${OEM_MNT}/bin/oem-postinst" "${SLOT}" "${INSTALL_MNT}"
 fi
 
-# locksmith 0.1.5 is broken, restart it lots to work around the issue
-if systemctl is-active --quiet locksmithd.service && \
-    locksmithctl help | grep -A1 '^VERSION:' | grep -q '0.1.5$';
-then
-    echo "Broken locksmith 0.1.5 detected, installing workaround timer."
-    # In one minute start restarting locksmithd every 5 minutes.
-    cat >/run/systemd/system/locksmithd-kicker.timer <<EOF
-[Timer]
-OnActiveSec=1min
-OnUnitActiveSec=5min
-EOF
-    cat >/run/systemd/system/locksmithd-kicker.service <<EOF
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl try-restart --no-block locksmithd.service
-EOF
-    systemctl start --no-block locksmithd-kicker.timer
-fi
-
 # Gather metadata about upcoming OS image.
 # shellcheck source=/dev/null
 source "${INSTALL_MNT}/lib/os-release"
