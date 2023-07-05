@@ -6,6 +6,9 @@
 set -euo pipefail
 umask 0022
 
+# This instead of "/oem" works because it is a symlink to /oem on newer systems
+# and we keep it /usr/share/oem because that is the correct path on older systems
+# that process this update to the new version which will then use /oem
 OEM_MNT="/usr/share/oem"
 
 INSTALL_MNT=$(dirname "$0")
