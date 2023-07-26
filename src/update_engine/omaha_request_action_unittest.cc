@@ -517,6 +517,7 @@ TEST(OmahaRequestActionTest, FormatUpdateCheckOutputTest) {
   NiceMock<PrefsMock> prefs;
   EXPECT_CALL(prefs, GetString(kPrefsPreviousVersion, _))
       .WillOnce(DoAll(SetArgumentPointee<1>(string("")), Return(true)));
+  EXPECT_CALL(prefs, SetString(kPrefsFullResponse, _)).Times(1);
   EXPECT_CALL(prefs, SetString(kPrefsPreviousVersion, _)).Times(1);
   ASSERT_FALSE(TestUpdateCheck(&prefs,
                                GetDefaultTestParams(),

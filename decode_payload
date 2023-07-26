@@ -1,8 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-CHECKINPUT=0
+DEBUG="${DEBUG-0}"
+CHECKINPUT="${CHECKINPUT-0}"
 SCRIPTFOLDER="$(dirname "$(readlink -f "$0")")"
+
+PROTOPATH="${PROTOPATH-"${SCRIPTFOLDER}"/src/update_engine}"
 
 if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
   echo "Usage: $0 PUBKEY PAYLOAD OUTPUT [KERNELOUTPUT]"
@@ -10,6 +13,7 @@ if [ $# -lt 3 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
   echo "Only one optional kernel payload is supported (the output file will be zero-sized if no payload was found)."
   echo "Only a signle signature is supported as only one pubkey is accepted and in the multi-signature case only the second signature is looked at."
   echo "Pass CHECKINPUT=1 to process the inline checksums in addition to the final checksum."
+  echo "Pass PROTOPATH=folder/ to specify the location of a directory with protobuf files."
   exit 1
 fi
 
@@ -23,9 +27,11 @@ KERNEL="${4-}"
 MLEN=$(dd status=none bs=1 skip=12 count=8 if="${FILE}" | od --endian=big -An -vtu8 -w1024 | tr -d ' ')
 
 # The manifest starts at offset 20 (with tail we do a +1 compared to dd) and we feed it into protoc for decoding (we assume that the text output format is stable)
-DESC=$(protoc --decode=chromeos_update_engine.DeltaArchiveManifest --proto_path "${SCRIPTFOLDER}"/src/update_engine "${SCRIPTFOLDER}"/src/update_engine/update_metadata.proto < <({ tail -c +21 "${FILE}" || true ; } |head -c "${MLEN}"))
+DESC=$(protoc --decode=chromeos_update_engine.DeltaArchiveManifest --proto_path "${PROTOPATH}" "${PROTOPATH}"/update_metadata.proto < <({ tail -c +21 "${FILE}" || true ; } |head -c "${MLEN}"))
 
-echo "${DESC}" >&2
+if [ "${DEBUG}" = 1 ]; then
+  echo "${DESC}" >&2
+fi
 
 # Truncate
 true > "${PARTOUT}"
@@ -117,8 +123,12 @@ fi
 
 # The signature protobuf message is at the signature offset
 # Decoding the "data" field caues some troubles and needs a workaround below for the dev key
-SIGDESC=$(protoc --decode=chromeos_update_engine.Signatures --proto_path "${SCRIPTFOLDER}"/src/update_engine "${SCRIPTFOLDER}"/src/update_engine/update_metadata.proto < <({ tail -c +$((21 + MLEN + SIGOFFSET)) "${FILE}" || true ; } |head -c "${SIGSIZE}"))
-echo "${SIGDESC}" >&2
+SIGDESC=$(protoc --decode=chromeos_update_engine.Signatures --proto_path "${PROTOPATH}" "${PROTOPATH}"/update_metadata.proto < <({ tail -c +$((21 + MLEN + SIGOFFSET)) "${FILE}" || true ; } |head -c "${SIGSIZE}"))
+
+if [ "${DEBUG}" = 1 ]; then
+  echo "${SIGDESC}" >&2
+fi
+
 VERSION=2 # Init for the single-signature case, in the many-signature case the first signature ("version 1" but better would be "number 1") is,
 # at least for Flatcar production, a dummy and parsing it overwrites this variable with 1 and it will be ignored,
 # the second signature is "version 2" and the one we want to check. Even if only one signature is there it becomes "version 2",

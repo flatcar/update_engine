@@ -35,6 +35,7 @@ fi
 # shellcheck source=/dev/null
 source "${INSTALL_MNT}/lib/os-release"
 NEXT_VERSION_ID=${VERSION_ID}
+NEXT_VERSION="${VERSION}"
 
 # shellcheck source=/dev/null
 source /usr/lib/os-release
@@ -42,6 +43,167 @@ source /usr/lib/os-release
 tee_journal() {
     tee >(systemd-cat -t coreos-postinst)
 }
+
+OEMID=$({ grep -m 1 -o "^ID=.*" "${OEM_MNT}"/oem-release || true ; } | cut -d = -f 2)
+
+# Must not be used as "if sysext_download; then" or "sysext_download ||" because that makes set -e a no-op, and also must not use "( sysext_download )" because we want to set the global SUCCESS variable.
+sysext_download() {
+    local name="$1" # Payload name
+    local target="$2" # Path to write the payload to, writing does not need to be atomic because the caller later does an atomic move
+    local from="${3-}" # Either path to XML dump or the constant "release-server"
+    local base=""
+    local entries=""
+    local hash=""
+    local size=""
+    local url=""
+    local ret
+    SUCCESS=false
+    set +e
+    (
+    set -e
+    # TODO: Replace the below with invoking an ue-rs helper binary for downloading the payload "name", either from the XML data or the release server ("from"), and write unpacked, verified file to "target"
+    if [ "${from}" = "release-server" ]; then
+      url="https://update.release.flatcar-linux.net/${FLATCAR_BOARD}/${NEXT_VERSION}/${name}"
+    elif [ "${from}" = "bincache-server" ]; then
+      url="https://bincache.flatcar-linux.net/images/${FLATCAR_BOARD/-usr}/${NEXT_VERSION}/${name}"
+    else
+      base=$(grep -m 1 -o 'codebase="[^"]*"' "${from}" | cut -d '"' -f 2)
+      entries=$(grep -m 1 -o "<package name=\"${name}\"[^>]*" "${from}")
+      url="${base}/${name}"
+      size=$(echo "${entries}" | grep -o 'size="[0-9]*' | cut -d '"' -f 2)
+      hash=$(echo "${entries}" | grep -o -P 'hash="[^"]*' | cut -d '"' -f 2) # openssl dgst -binary -sha1 < "$PAYLOAD" | base64
+    fi
+    rm -f "${target}.tmp"
+    curl -fsSL --retry-delay 1 --retry 60 --retry-connrefused --retry-max-time 60 --connect-timeout 20 -o "${target}.tmp" "${url}"
+    if [ "${size}" != "" ] && [ "${hash}" != "" ]; then
+      if [ "$(stat --printf='%s' "${target}.tmp")" != "${size}" ]; then
+        echo "Size mismatch for ${name}" >&2
+        return 1 # jump to ret=
+      fi
+      if [ "$(openssl dgst -binary -sha1 < "${target}.tmp" | base64)" != "${hash}" ]; then
+        echo "Hash mismatch for ${name}" >&2
+        return 1 # jump to ret=
+      fi
+    fi
+    # Using "${INSTALL_MNT}" here is ok because it was verified first by update-engine
+    PROTOPATH="${INSTALL_MNT}"/share/update_engine/ "${INSTALL_MNT}"/share/update_engine/decode_payload /usr/share/update_engine/update-payload-key.pub.pem "${target}.tmp" "${target}"
+    )
+    ret=$?
+    set -e
+    rm -f "${target}.tmp"
+    if [ "${ret}" -eq 0 ]; then
+      SUCCESS=true
+    fi
+}
+
+# To know whether an OEM update payload is expected we can't rely on checking if the Omaha response contains one
+# because users may run their own instance and forget to supply it, or this is an old instance that doesn't hand us
+# the XML dump over. In both cases we do a fallback download and rely on a hardcoded list of OEM sysexts which we
+# anyway need to maintain for the migration actions. Besides checking that an entry in the list exists we can also
+# check for the active-oem-OEM flag file to support custom OEMs (but they must be part of the Omaha response).
+if [ "${OEMID}" != "" ] && { [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ] || [ -e "${OEM_MNT}/sysext/active-oem-${OEMID}" ]; }; then
+    mkdir -p "${OEM_MNT}"/sysext/ /etc/flatcar/oem-sysext/
+    # Delete sysext images that belonged to the now overwritten /usr partition but keep the sysext image for the current version
+    KEEP="${OEM_MNT}/sysext/oem-${OEMID}-${VERSION}.raw"
+    if [ ! -e "${KEEP}" ]; then
+      KEEP="/etc/flatcar/oem-sysext/oem-${OEMID}-${VERSION}.raw"
+    fi
+    if [ ! -e "${KEEP}" ]; then
+      KEEP="${OEM_MNT}/sysext/oem-${OEMID}-initial.raw" # It may not exist as well but that's ok (also, it can only exist on the OEM partition)
+    fi
+    shopt -s nullglob
+    for OLD_IMAGE in "${OEM_MNT}"/sysext/oem*raw /etc/flatcar/oem-sysext/oem*raw; do
+      if [ "${OLD_IMAGE}" != "${KEEP}" ] && [ -f "${OLD_IMAGE}" ]; then
+        rm -f "${OLD_IMAGE}"
+      fi
+    done
+    # Note that in the case of VERSION=NEXT_VERSION we will replace the running sysext and maybe it's better
+    # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk)
+    SUCCESS=false
+    # Preferred is to download from the location given by the Omaha response
+    # which only works with a new update-engine client that creates "full-response",
+    # and we also have to check that this file was created fresh for this update operation
+    # (relies on the reset of /var/lib/update_engine/prefs/previous-version that old clients also do)
+    if [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -gt $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ]; then
+        rm -f "/var/lib/update_engine/oem-${OEMID}.raw"
+        sysext_download "oem-${OEMID}.gz" "/var/lib/update_engine/oem-${OEMID}.raw" /var/lib/update_engine/prefs/full-response
+    fi
+    # If that was not provided due to updating from an old version or if the download failed, try the release server or bincache
+    if [ "${SUCCESS}" = false ]; then
+        rm -f "/var/lib/update_engine/oem-${OEMID}.raw"
+        PAYLOADSERVER=release-server
+        PAYLOADNAME="oem-${OEMID}.gz"
+        if [ "$(md5sum /usr/share/update_engine/update-payload-key.pub.pem | cut -d " " -f 1)" = "7192addf4a7f890c0057d21653eff2ea" ]; then
+          PAYLOADSERVER=bincache-server
+          PAYLOADNAME="flatcar_test_update-oem-${OEMID}.gz"
+        fi
+        sysext_download "${PAYLOADNAME}" "/var/lib/update_engine/oem-${OEMID}.raw" "${PAYLOADSERVER}"
+    fi
+    if [ "${SUCCESS}" = false ]; then
+        rm -f "/var/lib/update_engine/oem-${OEMID}.raw"
+        echo "Failed to download required OEM update payload" >&2
+        exit 1
+    fi
+    NEW_SYSEXT="${OEM_MNT}/sysext/oem-${OEMID}-${NEXT_VERSION}.raw"
+    # We don't need to check if it's the initial MVP OEM because it's an update payload provided for a particular version
+    echo "Trying to place /var/lib/update_engine/oem-${OEMID}-${NEXT_VERSION}.raw on OEM partition" >&2
+    if ! mv "/var/lib/update_engine/oem-${OEMID}.raw" "${NEW_SYSEXT}"; then
+        echo "That failed, moving it to right location on root partition" >&2
+        NEW_SYSEXT="/etc/flatcar/oem-sysext/oem-${OEMID}-${NEXT_VERSION}.raw"
+        mv "/var/lib/update_engine/oem-${OEMID}.raw" "${NEW_SYSEXT}"
+    fi
+    if [ -e "${KEEP}" ] && [ -e "${NEW_SYSEXT}" ] && [ ! -e "${OEM_MNT}/sysext/active-oem-${OEMID}" ]; then
+      if [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ]; then
+        touch "${OEM_MNT}/sysext/migrate-oem-${OEMID}"
+      fi
+      touch "${OEM_MNT}/sysext/active-oem-${OEMID}"
+    fi
+fi
+
+# Download official Flatcar extensions
+# The enabled-sysext.conf file is read from /etc and /usr and contains one name per line,
+# and when the name is prefixed with a "-" it means that the extension should be disabled if enabled by default in the file from /usr.
+# It may contain comments starting with "#" at the beginning of a line or after a name.
+# The file is also used in bootengine to know which extensions to enable.
+# Note that we don't need "{ grep || true ; }" to suppress the match return code because in for _ in $(grep...) return codes are ignored
+for NAME in $(grep -h -o '^[^#]*' /etc/flatcar/enabled-sysext.conf /usr/share/flatcar/enabled-sysext.conf | grep -v -x -f <(grep '^-' /etc/flatcar/enabled-sysext.conf | cut -d - -f 2-) | grep -v -P '^(-).*'); do
+    KEEP="/etc/flatcar/sysext/flatcar-${NAME}-${VERSION}.raw"
+    shopt -s nullglob
+    # Delete sysext images that belonged to the now overwritten /usr partition but keep the sysext image for the current version
+    for OLD_IMAGE in /etc/flatcar/sysext/flatcar*raw; do
+      if [ "${OLD_IMAGE}" != "${KEEP}" ] && [ -f "${OLD_IMAGE}" ]; then
+        rm -f "${OLD_IMAGE}"
+      fi
+    done
+    # Note that in the case of VERSION=NEXT_VERSION we will replace the running sysext and maybe it's better
+    # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk)
+    SUCCESS=false
+    # Preferred is to download from the location given by the Omaha response
+    # which only works with a new update-engine client that creates "full-response",
+    # and we also have to check that this file was created fresh for this update operation
+    # (relies on the reset of /var/lib/update_engine/prefs/previous-version that old clients also do)
+    if [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -gt $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ]; then
+        rm -f "/var/lib/update_engine/flatcar-${NAME}.raw"
+        sysext_download "flatcar-${NAME}.gz" "/var/lib/update_engine/flatcar-${NAME}.raw" /var/lib/update_engine/prefs/full-response
+    fi
+    # If that was not provided due to updating from an old version or if the download failed, try the release server or bincache
+    if [ "${SUCCESS}" = false ]; then
+        rm -f "/var/lib/update_engine/flatcar-${NAME}.raw"
+        PAYLOADSERVER=release-server
+        PAYLOADNAME="flatcar-${NAME}.gz"
+        if [ "$(md5sum /usr/share/update_engine/update-payload-key.pub.pem | cut -d " " -f 1)" = "7192addf4a7f890c0057d21653eff2ea" ]; then
+          PAYLOADSERVER=bincache-server
+          PAYLOADNAME="flatcar_test_update-flatcar-${NAME}.gz"
+        fi
+        sysext_download "${PAYLOADNAME}" "/var/lib/update_engine/flatcar-${NAME}.raw" "${PAYLOADSERVER}"
+    fi
+    if [ "${SUCCESS}" = false ]; then
+        rm -f "/var/lib/update_engine/flatcar-${NAME}.raw"
+        echo "Failed to download required OEM update payload" >&2
+        exit 1
+    fi
+    mv  "/var/lib/update_engine/flatcar-${NAME}.raw" "/etc/flatcar/sysext/flatcar-${NAME}-${NEXT_VERSION}.raw"
+done
 
 # Keep old nodes on cgroup v1
 if [[ "${BUILD_ID}" != "dev-"* ]]; then
