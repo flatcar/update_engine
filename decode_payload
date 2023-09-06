@@ -129,10 +129,12 @@ if [ "${DEBUG}" = 1 ]; then
   echo "${SIGDESC}" >&2
 fi
 
-VERSION=2 # Init for the single-signature case, in the many-signature case the first signature ("version 1" but better would be "number 1") is,
-# at least for Flatcar production, a dummy and parsing it overwrites this variable with 1 and it will be ignored,
-# the second signature is "version 2" and the one we want to check. Even if only one signature is there it becomes "version 2",
-# see https://github.com/flatcar/update_engine/blob/c6f566d47d8949632f7f43871eb8d5c625af3209/src/update_engine/payload_signer.cc#L33
+# The signal "version" is actually the numbering of multiple signatures, it starts at 2 if there is one signature but
+# otherwise it starts at 1. We accept the payload if we find a valid signature that we have a pub key for.
+# See https://github.com/flatcar/update_engine/blob/c6f566d47d8949632f7f43871eb8d5c625af3209/src/update_engine/payload_signer.cc#L33
+# Note that Flatcar production also has a dummy signature with a random key,
+# see https://github.com/flatcar/flatcar-build-scripts/blob/821d8da19567e3d1a29dc24f8c822f67df6a5e02/generate_payload#L384
+FOUND=false
 while IFS= read -r LINE; do
   LINE=$(echo "${LINE}" | sed 's/^ *//g')
   case "${LINE}" in
@@ -144,17 +146,19 @@ while IFS= read -r LINE; do
             # The raw output instead of asn1parse is used to easily extract the sha256 checksum (done by tail -c 32)
             # We also calculate the payload hash that the signature was done for, note that it's of course not the whole file but only up to the attached signature itself
             PAYLOADHASH=$(head -c "$((20 + MLEN + SIGOFFSET))" "${FILE}" | sha256sum | cut -d ' ' -f 1)
-            if [ "${VERSION}" = 2 ] && [ "${SIGHEX}" != "${PAYLOADHASH}" ]; then
-              echo "Signature error" >&2
-              exit 1
-            elif [ "${VERSION}" != 2 ]; then
-              # For Flatcar production this is a dummy signature with a random key,
-              # see https://github.com/flatcar/flatcar-build-scripts/blob/821d8da19567e3d1a29dc24f8c822f67df6a5e02/generate_payload#L384
-              echo "Unprocessed 'version ${VERSION}' signature (Payload hash: ${PAYLOADHASH}, SIGDATA: ${SIGDATA})" >&2
+            if [ "${SIGHEX}" = "${PAYLOADHASH}" ]; then
+              FOUND=true
+              echo "Valid signature found (Version: ${VERSION}, Payload Hash: ${PAYLOADHASH})" >&2
+            else
+              echo "Signature error (Version: ${VERSION}, Payload Hash: ${PAYLOADHASH}, SIGDATA: ${SIGDATA})" >&2
             fi
             ;;
   *) ;;
   esac
 done <<< "${SIGDESC}"
 
+if [ "${FOUND}" != true ]; then
+  echo "No valid signature found" >&2
+  exit 1
+fi
 echo "Success" >&2
