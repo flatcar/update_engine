@@ -80,79 +80,47 @@ bool OmahaResponseHandlerActionTest::DoTest(const OmahaResponse& in,
 }
 
 TEST_F(OmahaResponseHandlerActionTest, SimpleTest) {
-  ScopedPathUnlinker deadline_unlinker(
-      OmahaResponseHandlerAction::kDeadlineFile);
   {
     OmahaResponse in;
     in.update_exists = true;
     in.display_version = "a.b.c.d";
     in.payload_urls.push_back("http://foo/the_update_a.b.c.d.tgz");
-    in.more_info_url = "http://more/info";
     in.hash = "HASH+";
     in.size = 12;
-    in.needs_admin = true;
-    in.prompt = false;
-    in.deadline = "20101020";
     InstallPlan install_plan;
     EXPECT_TRUE(DoTest(in, "/dev/sda3", &install_plan));
     EXPECT_EQ(in.payload_urls[0], install_plan.download_url);
     EXPECT_EQ(in.hash, install_plan.payload_hash);
     EXPECT_EQ(in.display_version, install_plan.display_version);
     EXPECT_EQ("/dev/sda4", install_plan.partition_path);
-    string deadline;
-    EXPECT_TRUE(utils::ReadFile(
-        OmahaResponseHandlerAction::kDeadlineFile,
-        &deadline));
-    EXPECT_EQ("20101020", deadline);
-    struct stat deadline_stat;
-    EXPECT_EQ(0, stat(OmahaResponseHandlerAction::kDeadlineFile,
-                      &deadline_stat));
-    EXPECT_EQ(S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH,
-              deadline_stat.st_mode);
   }
   {
     OmahaResponse in;
     in.update_exists = true;
     in.display_version = "a.b.c.d";
     in.payload_urls.push_back("http://foo/the_update_a.b.c.d.tgz");
-    in.more_info_url = "http://more/info";
     in.hash = "HASHj+";
     in.size = 12;
-    in.needs_admin = true;
-    in.prompt = true;
     InstallPlan install_plan;
     EXPECT_TRUE(DoTest(in, "/dev/sda4", &install_plan));
     EXPECT_EQ(in.payload_urls[0], install_plan.download_url);
     EXPECT_EQ(in.hash, install_plan.payload_hash);
     EXPECT_EQ(in.display_version, install_plan.display_version);
     EXPECT_EQ("/dev/sda3", install_plan.partition_path);
-    string deadline;
-    EXPECT_TRUE(utils::ReadFile(
-        OmahaResponseHandlerAction::kDeadlineFile,
-        &deadline) && deadline.empty());
   }
   {
     OmahaResponse in;
     in.update_exists = true;
     in.display_version = "a.b.c.d";
     in.payload_urls.push_back(kLongName);
-    in.more_info_url = "http://more/info";
     in.hash = "HASHj+";
     in.size = 12;
-    in.needs_admin = true;
-    in.prompt = true;
-    in.deadline = "some-deadline";
     InstallPlan install_plan;
     EXPECT_TRUE(DoTest(in, "/dev/sda3", &install_plan));
     EXPECT_EQ(in.payload_urls[0], install_plan.download_url);
     EXPECT_EQ(in.hash, install_plan.payload_hash);
     EXPECT_EQ(in.display_version, install_plan.display_version);
     EXPECT_EQ("/dev/sda4", install_plan.partition_path);
-    string deadline;
-    EXPECT_TRUE(utils::ReadFile(
-        OmahaResponseHandlerAction::kDeadlineFile,
-        &deadline));
-    EXPECT_EQ("some-deadline", deadline);
   }
 }
 

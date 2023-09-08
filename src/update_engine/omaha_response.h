@@ -22,8 +22,6 @@ struct OmahaResponse {
         poll_interval(0),
         size(0),
         max_failure_count_per_url(0),
-        needs_admin(false),
-        prompt(false),
         is_delta_payload(false),
         disable_payload_backoff(false) {}
 
@@ -40,16 +38,12 @@ struct OmahaResponse {
   // URL (i.e. in terms of Omaha XML, each value is a urlBase + packageName)
   std::vector<std::string> payload_urls;
 
-  std::string more_info_url;
   std::string hash;
-  std::string deadline;
   off_t size;
   // The number of URL-related failures to tolerate before moving on to the
   // next URL in the current pass. This is a configurable value from the
   // Omaha Response attribute, if ever we need to fine tune the behavior.
   uint32_t max_failure_count_per_url;
-  bool needs_admin;
-  bool prompt;
 
   // True if the payload described in this response is a delta payload.
   // False if it's a full payload.

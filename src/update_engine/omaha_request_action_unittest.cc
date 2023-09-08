@@ -69,14 +69,10 @@ string GetNoUpdateResponse(const string& app_id) {
 
 string GetUpdateResponse2(const string& app_id,
                           const string& display_version,
-                          const string& more_info_url,
-                          const string& prompt,
                           const string& codebase,
                           const string& filename,
                           const string& hash,
-                          const string& needsadmin,
-                          const string& size,
-                          const string& deadline) {
+                          const string& size) {
   string response =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?><response "
       "protocol=\"3.0\">"
@@ -88,12 +84,9 @@ string GetUpdateResponse2(const string& app_id,
       "<packages><package hash=\"not-used\" name=\"" + filename +  "\" "
       "size=\"" + size + "\"/></packages>"
       "<actions><action event=\"postinstall\" "
-      "MoreInfo=\"" + more_info_url + "\" Prompt=\"" + prompt + "\" "
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"true\" "
       "sha256=\"" + hash + "\" "
-      "needsadmin=\"" + needsadmin + "\" " +
-      (deadline.empty() ? "" : ("deadline=\"" + deadline + "\" ")) +
       "/></actions></manifest></updatecheck></app></response>";
   LOG(INFO) << "Response = " << response;
   return response;
@@ -101,24 +94,16 @@ string GetUpdateResponse2(const string& app_id,
 
 string GetUpdateResponse(const string& app_id,
                          const string& display_version,
-                         const string& more_info_url,
-                         const string& prompt,
                          const string& codebase,
                          const string& filename,
                          const string& hash,
-                         const string& needsadmin,
-                         const string& size,
-                         const string& deadline) {
+                         const string& size) {
   return GetUpdateResponse2(app_id,
                             display_version,
-                            more_info_url,
-                            prompt,
                             codebase,
                             filename,
                             hash,
-                            needsadmin,
-                            size,
-                            deadline);
+                            size);
 }
 }  // namespace {}
 
@@ -215,14 +200,10 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "http://more/info",
-                                        "true",  // prompt
                                         "http://code/base/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=",  // checksum
-                                        "false",  // needs admin
-                                        "123",  // size
-                                        "20101020"),  // deadline
+                                        "123"),  // size
                       -1,
                       false,  // ping_only
                       kActionCodeSuccess,
@@ -232,12 +213,8 @@ TEST(OmahaRequestActionTest, ValidUpdateTest) {
   EXPECT_TRUE(response.update_exists);
   EXPECT_EQ("1.2.3.4", response.display_version);
   EXPECT_EQ("http://code/base/file.signed", response.payload_urls[0]);
-  EXPECT_EQ("http://more/info", response.more_info_url);
   EXPECT_EQ("HASH1234=", response.hash);
   EXPECT_EQ(123, response.size);
-  EXPECT_FALSE(response.needs_admin);
-  EXPECT_TRUE(response.prompt);
-  EXPECT_EQ("20101020", response.deadline);
 }
 
 TEST(OmahaRequestActionTest, NoOutputPipeTest) {
@@ -354,11 +331,9 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
       "<packages><package hash=\"not-used\" name=\"f\" "
       "size=\"587\"/></packages>"
       "<actions><action event=\"postinstall\" "
-      "Prompt=\"false\" "
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"false\" "
       "sha256=\"lkq34j5345\" "
-      "needsadmin=\"true\" "
       "/></actions></manifest></updatecheck></app></response>";
   LOG(INFO) << "Input Response = " << input_response;
 
@@ -374,12 +349,8 @@ TEST(OmahaRequestActionTest, MissingFieldTest) {
   EXPECT_TRUE(response.update_exists);
   EXPECT_EQ("1.0.0.0", response.display_version);
   EXPECT_EQ("http://missing/field/test/f", response.payload_urls[0]);
-  EXPECT_EQ("", response.more_info_url);
   EXPECT_EQ("lkq34j5345", response.hash);
   EXPECT_EQ(587, response.size);
-  EXPECT_TRUE(response.needs_admin);
-  EXPECT_FALSE(response.prompt);
-  EXPECT_TRUE(response.deadline.empty());
 }
 
 TEST(OmahaRequestActionTest, ConcatUrlSlashTest) {
@@ -394,11 +365,9 @@ TEST(OmahaRequestActionTest, ConcatUrlSlashTest) {
       "<packages><package hash=\"not-used\" name=\"f\" "
       "size=\"587\"/></packages>"
       "<actions><action event=\"postinstall\" "
-      "Prompt=\"false\" "
       "IsDelta=\"true\" "
       "IsDeltaPayload=\"false\" "
       "sha256=\"lkq34j5345\" "
-      "needsadmin=\"true\" "
       "/></actions></manifest></updatecheck></app></response>";
   LOG(INFO) << "Input Response = " << input_response;
 
@@ -509,23 +478,17 @@ TEST(OmahaRequestActionTest, XmlDecodeTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "testthe&lt;url",  // more info
-                                        "true",  // prompt
                                         "testthe&amp;codebase/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=", // checksum
-                                        "false",  // needs admin
-                                        "123",  // size
-                                        "&lt;20110101"),  // deadline
+                                        "123"),  // size
                       -1,
                       false,  // ping_only
                       kActionCodeSuccess,
                       &response,
                       NULL));
 
-  EXPECT_EQ(response.more_info_url, "testthe<url");
   EXPECT_EQ(response.payload_urls[0], "testthe&codebase/file.signed");
-  EXPECT_EQ(response.deadline, "<20110101");
 }
 
 TEST(OmahaRequestActionTest, ParseIntTest) {
@@ -535,15 +498,11 @@ TEST(OmahaRequestActionTest, ParseIntTest) {
                       GetDefaultTestParams(),
                       GetUpdateResponse(OmahaRequestParams::kAppId,
                                         "1.2.3.4",  // version
-                                        "theurl",  // more info
-                                        "true",  // prompt
                                         "thecodebase/",  // dl url
                                         "file.signed", // file name
                                         "HASH1234=", // checksum
-                                        "false",  // needs admin
                                         // overflows int32:
-                                        "123123123123123",  // size
-                                        "deadline"),
+                                        "123123123123123"),  // size
                       -1,
                       false,  // ping_only
                       kActionCodeSuccess,
@@ -558,6 +517,7 @@ TEST(OmahaRequestActionTest, FormatUpdateCheckOutputTest) {
   NiceMock<PrefsMock> prefs;
   EXPECT_CALL(prefs, GetString(kPrefsPreviousVersion, _))
       .WillOnce(DoAll(SetArgumentPointee<1>(string("")), Return(true)));
+  EXPECT_CALL(prefs, SetString(kPrefsFullResponse, _)).Times(1);
   EXPECT_CALL(prefs, SetString(kPrefsPreviousVersion, _)).Times(1);
   ASSERT_FALSE(TestUpdateCheck(&prefs,
                                GetDefaultTestParams(),

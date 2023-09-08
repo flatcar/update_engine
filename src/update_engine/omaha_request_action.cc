@@ -28,7 +28,7 @@ using strings::StringPrintf;
 namespace chromeos_update_engine {
 
 // List of custom pair tags that we interpret in the Omaha Response:
-static const char* kTagDeadline = "deadline";
+// Deprecated: "deadline"; was used for Chrome/Chromium browser
 static const char* kTagDisablePayloadBackoff = "DisablePayloadBackoff";
 // Deprecated: "DisplayVersion"
 // Deprecated: "IsDelta"
@@ -39,9 +39,10 @@ static const char* kTagMaxFailureCountPerUrl = "MaxFailureCountPerUrl";
 // Deprecated: "ManifestSize"
 // Deprecated: "MetadataSignatureRsa"
 // Deprecated: "MetadataSize"
-static const char* kTagMoreInfo = "MoreInfo";
-static const char* kTagNeedsAdmin = "needsadmin";
-static const char* kTagPrompt = "Prompt";
+// Deprecated: "MoreInfo"; See https://github.com/google/omaha/blob/main/doc/ServerProtocolV2.md
+// "And on the Mac, the Google Software Update Agent supports the following optional attributes": Prompt, MoreInfo
+// Deprecated: "Prompt"
+// Deprecated: "needsadmin"; Not used by Flatcar
 static const char* kTagSha256 = "sha256";
 
 namespace {
@@ -590,11 +591,6 @@ bool OmahaRequestAction::ParseParams(xmlDoc* doc,
   }
 
   // Get the optional properties one by one.
-  output_object->more_info_url = XmlGetProperty(pie_action_node, kTagMoreInfo);
-  output_object->needs_admin =
-      XmlGetProperty(pie_action_node, kTagNeedsAdmin) == "true";
-  output_object->prompt = XmlGetProperty(pie_action_node, kTagPrompt) == "true";
-  output_object->deadline = XmlGetProperty(pie_action_node, kTagDeadline);
 
   string max = XmlGetProperty(pie_action_node, kTagMaxFailureCountPerUrl);
   if (!strings::StringToUint(max, &output_object->max_failure_count_per_url))
@@ -617,6 +613,9 @@ void OmahaRequestAction::TransferComplete(HttpFetcher *fetcher,
   ScopedActionCompleter completer(processor_, this);
   string current_response(response_buffer_.begin(), response_buffer_.end());
   LOG(INFO) << "Omaha request response: " << current_response;
+
+  LOG_IF(WARNING, !system_state_->prefs()->SetString(kPrefsFullResponse, current_response))
+      << "Unable to write full response.";
 
   // Events are best effort transactions -- assume they always succeed.
   if (IsEvent()) {

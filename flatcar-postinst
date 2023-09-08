@@ -6,17 +6,13 @@
 set -euo pipefail
 umask 0022
 
+# This instead of "/oem" works because it is a symlink to /oem on newer systems
+# and we keep it /usr/share/oem because that is the correct path on older systems
+# that process this update to the new version which will then use /oem
 OEM_MNT="/usr/share/oem"
 
 INSTALL_MNT=$(dirname "$0")
 INSTALL_DEV="$1"
-INSTALL_KERNEL=""
-
-for arg in "$@"; do
-    case "${arg}" in
-        KERNEL=*) INSTALL_KERNEL="${arg#KERNEL=}" ;;
-    esac
-done
 
 # Figure out if the slot id is A or B
 INSTALL_LABEL=$(blkid -o value -s PARTLABEL "${INSTALL_DEV}")
@@ -30,303 +26,184 @@ case "${INSTALL_LABEL}" in
         exit 1
 esac
 
-# Find the ESP partition and mount it if needed
-ESP_PARTTYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
-ESP_MNT=
-
-declare -a DEV_LIST
-mapfile DEV_LIST < <(lsblk -P -o NAME,PARTTYPE,MOUNTPOINT)
-
-for dev_info in "${DEV_LIST[@]}"; do
-    eval "$dev_info"
-
-    if [[ "${PARTTYPE}" != "${ESP_PARTTYPE}" ]]; then
-        continue
-    fi
-
-    if [[ -n "${MOUNTPOINT}" ]]; then
-        ESP_MNT="${MOUNTPOINT}"
-    else
-        ESP_MNT="$(mktemp -d /tmp/postinst_esp.XXXXXXXXXX)"
-        mount "/dev/${NAME}" "${ESP_MNT}"
-        trap "umount '${ESP_MNT}' && rmdir '${ESP_MNT}'" EXIT
-    fi
-
-    break
-done
-
-if [[ -z "${ESP_MNT}" ]]; then
-    echo "Failed to find ESP partition!" >&2
-    exit 1
-fi
-
-if [[ ! -d "${ESP_MNT}" ]]; then
-    echo "ESP partition mount point (${ESP_MNT}) is not a directory!" >&2
-    exit 1
-fi
-
-# Update bootloaders from CoreOS <= 522.x.x
-if grep -q cros_legacy /proc/cmdline; then
-    # Update kernel and bootloader configs
-    mkdir -p "${ESP_MNT}"{/syslinux,/boot/grub}
-    cp -v "${INSTALL_MNT}/boot/vmlinuz" \
-        "${ESP_MNT}/syslinux/vmlinuz.${SLOT}"
-    cp -v "${INSTALL_MNT}/boot/syslinux/root.${SLOT}.cfg" \
-        "${ESP_MNT}/syslinux/root.${SLOT}.cfg"
-
-    # For Xen's pvgrub
-    cp -v "${INSTALL_MNT}/boot/grub/menu.lst.${SLOT}" \
-        "${ESP_MNT}/boot/grub/menu.lst"
-
-    # For systems that have disabled boot_kernel and kexec
-    if ! grep -q boot_kernel "${ESP_MNT}/syslinux/default.cfg"; then
-        cp -v "${INSTALL_MNT}/boot/syslinux/default.cfg.${SLOT}" \
-            "${ESP_MNT}/syslinux/default.cfg"
-    fi
-elif [[ -z "${INSTALL_KERNEL}" ]]; then
-    # not a legacy system but update_engine didn't handle the kernel.
-    # kernel names are in lower case, ${SLOT,,} converts the slot name
-    if [ -e "${ESP_MNT}/coreos/vmlinuz-a" ] || [ -e "${ESP_MNT}/coreos/vmlinuz-b" ]; then
-        cp -v "${INSTALL_MNT}/boot/vmlinuz" \
-           "${ESP_MNT}/coreos/vmlinuz-${SLOT,,}"
-    else
-        cp -v "${INSTALL_MNT}/boot/vmlinuz" \
-           "${ESP_MNT}/flatcar/vmlinuz-${SLOT,,}"
-    fi
-fi
-
 # If the OEM provides a hook, call it
 if [[ -x "${OEM_MNT}/bin/oem-postinst" ]]; then
     "${OEM_MNT}/bin/oem-postinst" "${SLOT}" "${INSTALL_MNT}"
 fi
 
-# locksmith 0.1.5 is broken, restart it lots to work around the issue
-if systemctl is-active --quiet locksmithd.service && \
-    locksmithctl help | grep -A1 '^VERSION:' | grep -q '0.1.5$';
-then
-    echo "Broken locksmith 0.1.5 detected, installing workaround timer."
-    # In one minute start restarting locksmithd every 5 minutes.
-    cat >/run/systemd/system/locksmithd-kicker.timer <<EOF
-[Timer]
-OnActiveSec=1min
-OnUnitActiveSec=5min
-EOF
-    cat >/run/systemd/system/locksmithd-kicker.service <<EOF
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl try-restart --no-block locksmithd.service
-EOF
-    systemctl start --no-block locksmithd-kicker.timer
-fi
-
-# Azure's agent erroneously looks at the distribution name instead of its ID.
-# This prevents us from renaming the OS from "Flatcar". This patches platform.py
-# to always return "Flatcar" as the distribution name.
-PLATFORM_PATH="/usr/share/oem/python/lib64/python2.7/platform.py"
-if [ -e ${PLATFORM_PATH} ]; then
-    sum=($(md5sum ${PLATFORM_PATH}))
-    if [ ${sum} == "6315addf42c0b07f5f78d119b578e20a" ]; then
-        sed --in-place \
-            "s%distname = os_release_info\['NAME'\]%distname = \"Flatcar\"%" \
-            ${PLATFORM_PATH}
-    fi
-fi
-
-# Our VMware OEM partition contained a version of vmtoolsd that was vulnerable to 
-# CVE-2015-5191 (http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2015-5191).
-# This CVE can be mitigated by setting PrivateTmp=true on the vmtoolsd service file.
-# coreos-base/oem-vmware-10.1.5 is the last vulnerable version of the oem ebuild.
-# Note: we check in both /etc/oem-release and /usr/share/oem/oem-release
-# because pre-ignition Container Linux machines did not set the oem.id cmdline,
-# and also wrote oem-release only to /etc
-VMTOOLSD_DROPIN=/etc/systemd/system/vmtoolsd.service.d/90-tmpfiles-cve-2015-4191.conf
-if [ ! -e $VMTOOLSD_DROPIN ] && grep --quiet --no-messages "^ID=vmware$" /etc/oem-release /usr/share/oem/oem-release; then
-    mkdir -p /etc/systemd/system/vmtoolsd.service.d/
-    cat >$VMTOOLSD_DROPIN <<EOF
-# This file is automatically added during updates to mitigate CVE-2015-5191.
-# See http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2015-5191 for more info
-# on the CVE.
-# If you believe this file causes any issue, please report it as a bug to
-# Flatcar.
-[Service]
-PrivateTmp=true
-EOF
-fi
-
-# Tectonic backed itself into a corner by depending on the docker version
-# shipped in Container Linux but not actively ensuring that they kept clusters
-# up-to-date. As a result, the OS has continued to ship an old docker to work
-# around the issue. Now that Tectonic is able to specify the version of docker,
-# the default version of docker can be updated. Unfortunately, this can't be
-# done until all clusters have fallen out of support or have updated. In order
-# to expedite this process, the /etc/coreos/docker-1.12 flag file has been
-# added, which can signal that the installed version of docker should remain at
-# 1.12.6. This next chunk of black magic attempts to determine if the machine
-# is a part of a Tectonic cluster and, if so, write the flag file so that old
-# clusters aren't caught up in the docker-version bump.
-#
-# This code works by looking at the kubelet.service and a particular sysctl
-# entry that have always been written by the Tectonic installer. After
-# stripping out known variables and commonly-added user modifications, the
-# contents are hashed and compared against a known, good list. This list was
-# derived from every kubelet.service we have ever shipped in Tectonic. This was
-# not a particularly fun exercise.
-good_kubelet() {
-    KUBELET_PATH="/etc/systemd/system/kubelet.service"
-    declare -A GOOD_KUBELET_SUMS=(
-        [9aa254d55054fab5de48ca4e97ac3f0f]=1
-        [838ca6c80119a7daf9fdc3881698d058]=1
-        [35dd901dd87291df1ad8b6bf9b60a174]=1
-        [43af37f891e555c5e4cf7c18478fce54]=1
-        [c27121efdd210cc05a28c122f8f4a145]=1
-        [f4cab5080e349a999197daace5ca971c]=1
-        [71f8b465420d9373a536424eb81987ad]=1
-        [997f455cd2a02ce885e5ec7db4755fa5]=1
-        [69d890f526fe59da3117f56583bc9929]=1
-        [46a19863e5497f903fb3fdc0fbda9137]=1
-        [42357b95fc5ae52b476b8eb5c58ebb42]=1
-        [ee5ef7bb3443f872fe470f4eab586b3c]=1
-        [5b08a40b4f8312c4710b1676b761a9b0]=1
-        [879210fde7b8a3c8c02b8646dd06a35e]=1
-        [b0cf744da1a9b5df933baabdcfb5bf7f]=1
-        [b3c382658e55ada45a819c3274d25cb2]=1
-        [852dd9b686429b84144b36e101305968]=1
-    )
-
-    [ -f $KUBELET_PATH ] || return 1
-
-    # Remove all whitespace (including newlines), backslashes, known variables
-    # (the first six expressions), and commonly-added user options (the next
-    # two expressions) before determining the md5 sum.
-    sum=$(sed \
-        --regexp-extended \
-        --expression '/--cloud-provider=/d' \
-        --expression '/--hostname-override=/d' \
-        --expression '/--cluster-dns=/d' \
-        --expression '/--cluster_dns=/d' \
-        --expression '/--node-labels=/d' \
-        --expression '/--cni-bin-dir=/d' \
-        --expression '/--register-with-taints=/d' \
-        --expression '/\/opt\/s3-puller.sh/d' \
-        --expression '/-v=/d' \
-        --expression '/-vmodule=/d' \
-        --expression 's/\s//g' \
-        --expression 's/\\//g' \
-        $KUBELET_PATH | tr --delete '\n' | md5sum | gawk '{print $1}')
-
-    [[ -n "${GOOD_KUBELET_SUMS[${sum}]}" ]] && return 0
-}
-
-good_sysctl() {
-    SYSCTL_PATH="/etc/sysctl.d/max-user-watches.conf"
-    declare -A GOOD_SYSCTL_SUMS=(
-        [6de69b29eccf652d476f68c1abf3d0db]=1
-        [52ddc3d78f9ce25f068c6da1c1f7f2f3]=1
-    )
-
-    [ -f $SYSCTL_PATH ] || return 1
-
-    sum=$(md5sum $SYSCTL_PATH | gawk '{print $1}')
-
-    [[ -n "${GOOD_SYSCTL_SUMS[${sum}]}" ]] && return 0
-}
-
 # Gather metadata about upcoming OS image.
 # shellcheck source=/dev/null
 source "${INSTALL_MNT}/lib/os-release"
 NEXT_VERSION_ID=${VERSION_ID}
+NEXT_VERSION="${VERSION}"
 
-# Check to make sure that the current version is less than 1576 (this is the
-# first release to include this Tectonic work-around). This ensures that we
-# only apply this work-around one time.
 # shellcheck source=/dev/null
 source /usr/lib/os-release
-DOCKER_FLAG_PATH="/etc/flatcar/docker-1.12"
-if [ ! -e "${DOCKER_FLAG_PATH}" ] && [ "${VERSION_ID%%.*}" -lt 1576 ] &&
-    good_kubelet && good_sysctl
-then
-    echo "Detected a Tectonic cluster. Writing docker override..."
-    cat > "${DOCKER_FLAG_PATH}" <<< yes
-fi
 
 tee_journal() {
     tee >(systemd-cat -t coreos-postinst)
 }
 
-function patch_grub {
-	# See bug #2400
-	local file='/boot/coreos/grub/i386-pc/linux'
-	local tmpfile="$(mktemp)"
-	local escape_hatch='/boot/coreos/grub/skip-bug-2400-patch'
+OEMID=$({ grep -m 1 -o "^ID=.*" "${OEM_MNT}"/oem-release || true ; } | cut -d = -f 2)
 
-	[[ -e "${escape_hatch}" ]] && return
-	[[ ! -e "${file}.mod" ]] && return
-
-	# Avoid writing to /boot if we don't need to
-	gunzip -c -S .mod "${file}.mod" > "${tmpfile}"
-
-	# Values derived from https://gist.github.com/ajeddeloh/365cfed1d3a326362e05f78720baf4df
-	declare -A offsets
-	offsets=(
-	[1e11052c144ae483cba4f70efe278070c50daa80d1a5febe7c0d08e401baf0ab16a542b7a34da00d7aea1591238f01d9902ac6fbfcce8d82eebcf09d97d132cd]='3378'
-	[2fd5f0fade7c4c986259524f148f79ee1d1353d7ab83d1bdd0d50e52d393d8d896c32ab64eb714ba08861b8ba4f113d19f940a04889fa407784f010f119c8c19]='3378'
-	[3c591be75a6aa903ee8deed5f8116e627f53738eb8a2ceb80aeaab08f485b405b87565148e482a7234138302eb900786d0e14939a3c3451d424052ca2bd73181]='3383'
-	[6d60e369c1b4b484c7221e91d80f03a782b5286137f8087b2bf22b9f54e3507c4947d2a456ba46a6ef3c0c7216dc8251c017e9122f44cba89e32f23a0542afd3]='3383'
-	[6e9e5ebb6cd1a15d5a570d9a06a56c9bf60cb047d858c7220dd9dcfd54ebb87c8e0ea4611ac98a0ab51fec9e87b265b2207973f3e4882d87f62d887da72f87ab]='3404'
-	[82b37fa4b305cab33277d2cf0249008731a69575b5689a47e72fe2a35be4440e0e116bc02191f9b0066ea3ae278327fe3409f28d25d13bae88c5f347dba6a254]='3383'
-	[8a7b03d92a8b115943e7f004820fadd2dc6ab125c077a48fb232a1e9ac77fdb27fbb01d52fd33a6ddf65a9f58ce981244c99bcca821030511caa277bc2f68239]='3378'
-	[a3e9dadfe3cc34189b5fee83bfc01c3c5b42e04ba19cdcd84f8301c42566617b5916294e2414348139d8c5e557a7ccf6c0d3dca0661f2d10c0c0077345630b1d]='3298'
-	[c127d7c1dbd5d11cf7af627e37808ea16166b6430ddd8e96111e503cc78ae1fd78083d474495951743fa1b489140be63178a4bb65dabb0d719c5d0ad9c57eb78]='3298'
-	[f1f9abefa49eeba6a3fe46ba3d254dfc3fa6e2cd8823835e2d982e9cbcd0d82c298e3896dc79d234305d2262a828a7398526906022f8ed7407368725d95e08d8]='3375'
-	)
-
-	declare -A correctvals
-	correctvals=(
-	[1e11052c144ae483cba4f70efe278070c50daa80d1a5febe7c0d08e401baf0ab16a542b7a34da00d7aea1591238f01d9902ac6fbfcce8d82eebcf09d97d132cd]='\x74\x02\x00\x00'
-	[2fd5f0fade7c4c986259524f148f79ee1d1353d7ab83d1bdd0d50e52d393d8d896c32ab64eb714ba08861b8ba4f113d19f940a04889fa407784f010f119c8c19]='\x88\x02\x00\x00'
-	[3c591be75a6aa903ee8deed5f8116e627f53738eb8a2ceb80aeaab08f485b405b87565148e482a7234138302eb900786d0e14939a3c3451d424052ca2bd73181]='\x74\x02\x00\x00'
-	[6d60e369c1b4b484c7221e91d80f03a782b5286137f8087b2bf22b9f54e3507c4947d2a456ba46a6ef3c0c7216dc8251c017e9122f44cba89e32f23a0542afd3]='\x74\x02\x00\x00'
-	[6e9e5ebb6cd1a15d5a570d9a06a56c9bf60cb047d858c7220dd9dcfd54ebb87c8e0ea4611ac98a0ab51fec9e87b265b2207973f3e4882d87f62d887da72f87ab]='\x88\x02\x00\x00'
-	[82b37fa4b305cab33277d2cf0249008731a69575b5689a47e72fe2a35be4440e0e116bc02191f9b0066ea3ae278327fe3409f28d25d13bae88c5f347dba6a254]='\x74\x02\x00\x00'
-	[8a7b03d92a8b115943e7f004820fadd2dc6ab125c077a48fb232a1e9ac77fdb27fbb01d52fd33a6ddf65a9f58ce981244c99bcca821030511caa277bc2f68239]='\x74\x02\x00\x00'
-	[a3e9dadfe3cc34189b5fee83bfc01c3c5b42e04ba19cdcd84f8301c42566617b5916294e2414348139d8c5e557a7ccf6c0d3dca0661f2d10c0c0077345630b1d]='\x74\x02\x00\x00'
-	[c127d7c1dbd5d11cf7af627e37808ea16166b6430ddd8e96111e503cc78ae1fd78083d474495951743fa1b489140be63178a4bb65dabb0d719c5d0ad9c57eb78]='\x74\x02\x00\x00'
-	[f1f9abefa49eeba6a3fe46ba3d254dfc3fa6e2cd8823835e2d982e9cbcd0d82c298e3896dc79d234305d2262a828a7398526906022f8ed7407368725d95e08d8]='\x74\x02\x00\x00'
-	)
-
-	filesum="$(sha512sum "${tmpfile}" | cut -d' ' -f1)"
-	if [[ -z "${offsets[$filesum]}" ]]; then
-		echo "Nothing to do"
-		rm "${tmpfile}"
-		touch "${escape_hatch}"
-		return
-	fi
-
-	printf "${correctvals[$filesum]}" | dd of="${tmpfile}" bs=1 seek="${offsets[$filesum]}" conv=notrunc status=none
-
-	# There's a lot of sync'ing going on. On remotely up to date systems (newer than 1109.1.0), sync can operate on
-	# individual files. On old systems it syncs everything which is slow, but we want to be as safe as possible.
-	# Since we write out the escape hatch after everything is done, this will only happen once.
-
-	# rezip onto /boot so ENOSPC can't cause problems
-	gzip -c "${tmpfile}" > "${file}.tmp"
-	rm "${tmpfile}"
-
-	# in case something goes horribly wrong. Do not use mv -b since it moves the original file to
-	# the backup name then moves the new file to the target, leaving a window with no file
-	cp -p "${file}.mod" "${file}.bak.bug2400"
-	sync "${file}.bak.bug2400" "${file}.tmp"
-
-	# use mv then sync to be as atomic as possible
-	mv "${file}.tmp" "${file}.mod"
-	sync '/boot/coreos/grub/i386-pc/'
-
-	touch "${escape_hatch}"
-
-	echo 'linux.mod updated successfully'
+# Must not be used as "if sysext_download; then" or "sysext_download ||" because that makes set -e a no-op, and also must not use "( sysext_download )" because we want to set the global SUCCESS variable.
+sysext_download() {
+    local name="$1" # Payload name
+    local target="$2" # Path to write the payload to, writing does not need to be atomic because the caller later does an atomic move
+    local from="${3-}" # Either path to XML dump or the constant "release-server"
+    local base=""
+    local entries=""
+    local hash=""
+    local size=""
+    local url=""
+    local ret
+    SUCCESS=false
+    set +e
+    (
+    set -e
+    # TODO: Replace the below with invoking an ue-rs helper binary for downloading the payload "name", either from the XML data or the release server ("from"), and write unpacked, verified file to "target"
+    if [ "${from}" = "release-server" ]; then
+      url="https://update.release.flatcar-linux.net/${FLATCAR_BOARD}/${NEXT_VERSION}/${name}"
+    elif [ "${from}" = "bincache-server" ]; then
+      url="https://bincache.flatcar-linux.net/images/${FLATCAR_BOARD/-usr}/${NEXT_VERSION}/${name}"
+    else
+      base=$(grep -m 1 -o 'codebase="[^"]*"' "${from}" | cut -d '"' -f 2)
+      entries=$(grep -m 1 -o "<package name=\"${name}\"[^>]*" "${from}")
+      url="${base}/${name}"
+      size=$(echo "${entries}" | grep -o 'size="[0-9]*' | cut -d '"' -f 2)
+      hash=$(echo "${entries}" | grep -o -P 'hash="[^"]*' | cut -d '"' -f 2) # openssl dgst -binary -sha1 < "$PAYLOAD" | base64
+    fi
+    rm -f "${target}.tmp"
+    curl -fsSL --retry-delay 1 --retry 60 --retry-connrefused --retry-max-time 60 --connect-timeout 20 -o "${target}.tmp" "${url}"
+    if [ "${size}" != "" ] && [ "${hash}" != "" ]; then
+      if [ "$(stat --printf='%s' "${target}.tmp")" != "${size}" ]; then
+        echo "Size mismatch for ${name}" >&2
+        return 1 # jump to ret=
+      fi
+      if [ "$(openssl dgst -binary -sha1 < "${target}.tmp" | base64)" != "${hash}" ]; then
+        echo "Hash mismatch for ${name}" >&2
+        return 1 # jump to ret=
+      fi
+    fi
+    # Using "${INSTALL_MNT}" here is ok because it was verified first by update-engine
+    PROTOPATH="${INSTALL_MNT}"/share/update_engine/ "${INSTALL_MNT}"/share/update_engine/decode_payload /usr/share/update_engine/update-payload-key.pub.pem "${target}.tmp" "${target}"
+    )
+    ret=$?
+    set -e
+    rm -f "${target}.tmp"
+    if [ "${ret}" -eq 0 ]; then
+      SUCCESS=true
+    fi
 }
 
-patch_grub
+# To know whether an OEM update payload is expected we can't rely on checking if the Omaha response contains one
+# because users may run their own instance and forget to supply it, or this is an old instance that doesn't hand us
+# the XML dump over. In both cases we do a fallback download and rely on a hardcoded list of OEM sysexts which we
+# anyway need to maintain for the migration actions. Besides checking that an entry in the list exists we can also
+# check for the active-oem-OEM flag file to support custom OEMs (but they must be part of the Omaha response).
+if [ "${OEMID}" != "" ] && { [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ] || [ -e "${OEM_MNT}/sysext/active-oem-${OEMID}" ]; }; then
+    mkdir -p "${OEM_MNT}"/sysext/ /etc/flatcar/oem-sysext/
+    # Delete sysext images that belonged to the now overwritten /usr partition but keep the sysext image for the current version
+    KEEP="${OEM_MNT}/sysext/oem-${OEMID}-${VERSION}.raw"
+    if [ ! -e "${KEEP}" ]; then
+      KEEP="/etc/flatcar/oem-sysext/oem-${OEMID}-${VERSION}.raw"
+    fi
+    if [ ! -e "${KEEP}" ]; then
+      KEEP="${OEM_MNT}/sysext/oem-${OEMID}-initial.raw" # It may not exist as well but that's ok (also, it can only exist on the OEM partition)
+    fi
+    shopt -s nullglob
+    for OLD_IMAGE in "${OEM_MNT}"/sysext/oem*raw /etc/flatcar/oem-sysext/oem*raw; do
+      if [ "${OLD_IMAGE}" != "${KEEP}" ] && [ -f "${OLD_IMAGE}" ]; then
+        rm -f "${OLD_IMAGE}"
+      fi
+    done
+    # Note that in the case of VERSION=NEXT_VERSION we will replace the running sysext and maybe it's better
+    # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk)
+    SUCCESS=false
+    # Preferred is to download from the location given by the Omaha response
+    # which only works with a new update-engine client that creates "full-response",
+    # and we also have to check that this file was created fresh for this update operation
+    # (relies on the reset of /var/lib/update_engine/prefs/previous-version that old clients also do)
+    if [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -gt $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ]; then
+        rm -f "/var/lib/update_engine/oem-${OEMID}.raw"
+        sysext_download "oem-${OEMID}.gz" "/var/lib/update_engine/oem-${OEMID}.raw" /var/lib/update_engine/prefs/full-response
+    fi
+    # If that was not provided due to updating from an old version or if the download failed, try the release server or bincache
+    if [ "${SUCCESS}" = false ]; then
+        rm -f "/var/lib/update_engine/oem-${OEMID}.raw"
+        PAYLOADSERVER=release-server
+        PAYLOADNAME="oem-${OEMID}.gz"
+        if [ "$(md5sum /usr/share/update_engine/update-payload-key.pub.pem | cut -d " " -f 1)" = "7192addf4a7f890c0057d21653eff2ea" ]; then
+          PAYLOADSERVER=bincache-server
+          PAYLOADNAME="flatcar_test_update-oem-${OEMID}.gz"
+        fi
+        sysext_download "${PAYLOADNAME}" "/var/lib/update_engine/oem-${OEMID}.raw" "${PAYLOADSERVER}"
+    fi
+    if [ "${SUCCESS}" = false ]; then
+        rm -f "/var/lib/update_engine/oem-${OEMID}.raw"
+        echo "Failed to download required OEM update payload" >&2
+        exit 1
+    fi
+    NEW_SYSEXT="${OEM_MNT}/sysext/oem-${OEMID}-${NEXT_VERSION}.raw"
+    # We don't need to check if it's the initial MVP OEM because it's an update payload provided for a particular version
+    echo "Trying to place /var/lib/update_engine/oem-${OEMID}-${NEXT_VERSION}.raw on OEM partition" >&2
+    if ! mv "/var/lib/update_engine/oem-${OEMID}.raw" "${NEW_SYSEXT}"; then
+        echo "That failed, moving it to right location on root partition" >&2
+        NEW_SYSEXT="/etc/flatcar/oem-sysext/oem-${OEMID}-${NEXT_VERSION}.raw"
+        mv "/var/lib/update_engine/oem-${OEMID}.raw" "${NEW_SYSEXT}"
+    fi
+    if [ -e "${KEEP}" ] && [ -e "${NEW_SYSEXT}" ] && [ ! -e "${OEM_MNT}/sysext/active-oem-${OEMID}" ]; then
+      if [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ]; then
+        touch "${OEM_MNT}/sysext/migrate-oem-${OEMID}"
+      fi
+      touch "${OEM_MNT}/sysext/active-oem-${OEMID}"
+    fi
+fi
+
+# Download official Flatcar extensions
+# The enabled-sysext.conf file is read from /etc and /usr and contains one name per line,
+# and when the name is prefixed with a "-" it means that the extension should be disabled if enabled by default in the file from /usr.
+# It may contain comments starting with "#" at the beginning of a line or after a name.
+# The file is also used in bootengine to know which extensions to enable.
+# Note that we don't need "{ grep || true ; }" to suppress the match return code because in for _ in $(grep...) return codes are ignored
+for NAME in $(grep -h -o '^[^#]*' /etc/flatcar/enabled-sysext.conf /usr/share/flatcar/enabled-sysext.conf | grep -v -x -f <(grep '^-' /etc/flatcar/enabled-sysext.conf | cut -d - -f 2-) | grep -v -P '^(-).*'); do
+    KEEP="/etc/flatcar/sysext/flatcar-${NAME}-${VERSION}.raw"
+    shopt -s nullglob
+    # Delete sysext images that belonged to the now overwritten /usr partition but keep the sysext image for the current version
+    for OLD_IMAGE in /etc/flatcar/sysext/flatcar*raw; do
+      if [ "${OLD_IMAGE}" != "${KEEP}" ] && [ -f "${OLD_IMAGE}" ]; then
+        rm -f "${OLD_IMAGE}"
+      fi
+    done
+    # Note that in the case of VERSION=NEXT_VERSION we will replace the running sysext and maybe it's better
+    # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk)
+    SUCCESS=false
+    # Preferred is to download from the location given by the Omaha response
+    # which only works with a new update-engine client that creates "full-response",
+    # and we also have to check that this file was created fresh for this update operation
+    # (relies on the reset of /var/lib/update_engine/prefs/previous-version that old clients also do)
+    if [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -gt $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ]; then
+        rm -f "/var/lib/update_engine/flatcar-${NAME}.raw"
+        sysext_download "flatcar-${NAME}.gz" "/var/lib/update_engine/flatcar-${NAME}.raw" /var/lib/update_engine/prefs/full-response
+    fi
+    # If that was not provided due to updating from an old version or if the download failed, try the release server or bincache
+    if [ "${SUCCESS}" = false ]; then
+        rm -f "/var/lib/update_engine/flatcar-${NAME}.raw"
+        PAYLOADSERVER=release-server
+        PAYLOADNAME="flatcar-${NAME}.gz"
+        if [ "$(md5sum /usr/share/update_engine/update-payload-key.pub.pem | cut -d " " -f 1)" = "7192addf4a7f890c0057d21653eff2ea" ]; then
+          PAYLOADSERVER=bincache-server
+          PAYLOADNAME="flatcar_test_update-flatcar-${NAME}.gz"
+        fi
+        sysext_download "${PAYLOADNAME}" "/var/lib/update_engine/flatcar-${NAME}.raw" "${PAYLOADSERVER}"
+    fi
+    if [ "${SUCCESS}" = false ]; then
+        rm -f "/var/lib/update_engine/flatcar-${NAME}.raw"
+        echo "Failed to download required OEM update payload" >&2
+        exit 1
+    fi
+    mv  "/var/lib/update_engine/flatcar-${NAME}.raw" "/etc/flatcar/sysext/flatcar-${NAME}-${NEXT_VERSION}.raw"
+done
 
 # Keep old nodes on cgroup v1
 if [[ "${BUILD_ID}" != "dev-"* ]]; then
@@ -363,19 +240,6 @@ EOF
     fi
 fi
 
-
-# The vmware OEM on Container Linux 490.0.0 - 1353.8.0 includes a build of
-# open-vm-tools with a dlopened plugin that links with the libprocps.so.3
-# shipped in /usr. When upgrading to CL > 1786, which no longer carries
-# libprocps.so.3, copy that library from the old /usr into
-# /usr/share/oem/lib64 so open-vm-tools will continue to work.
-if [[ -e "/usr/lib64/libprocps.so.3" &&
-		! -e "/usr/share/oem/lib64/libprocps.so.3" &&
-		-e "/usr/share/oem/lib64/open-vm-tools/plugins/vmsvc/libguestInfo.so" ]] &&
-		ldd "/usr/share/oem/lib64/open-vm-tools/plugins/vmsvc/libguestInfo.so" | grep -q libprocps.so.3; then
-	cp -a "/usr/lib64/libprocps.so.3" "$(readlink -f /usr/lib64/libprocps.so.3)" \
-		/usr/share/oem/lib64/
-fi
 
 # use the cgpt binary from the image to ensure compatibility
 CGPT=

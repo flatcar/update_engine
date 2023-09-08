@@ -18,9 +18,6 @@ using std::string;
 
 namespace chromeos_update_engine {
 
-const char OmahaResponseHandlerAction::kDeadlineFile[] =
-    "/tmp/update-check-response-deadline";
-
 OmahaResponseHandlerAction::OmahaResponseHandlerAction(
     SystemState* system_state)
     : system_state_(system_state),
@@ -85,18 +82,6 @@ void OmahaResponseHandlerAction::PerformAction() {
   LOG(INFO) << "Using this install plan:";
   install_plan_.Dump();
 
-  // Send the deadline data (if any) to Chrome through a file. This is a pretty
-  // hacky solution but should be OK for now.
-  //
-  // TODO(petkov): Rearchitect this to avoid communication through a
-  // file. Ideallly, we would include this information in D-Bus's GetStatus
-  // method and UpdateStatus signal. A potential issue is that update_engine may
-  // be unresponsive during an update download.
-  utils::WriteFile(kDeadlineFile,
-                   response.deadline.data(),
-                   response.deadline.size());
-  chmod(kDeadlineFile, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-
   completer.set_code(kActionCodeSuccess);
 }
 
@@ -112,25 +97,8 @@ bool OmahaResponseHandlerAction::GetInstallDev(const std::string& boot_dev,
   return true;
 }
 
-namespace {
-bool IsCrosLegacySystem() {
-  string cmdline;
-  TEST_AND_RETURN_FALSE(
-      files::ReadFileToString(files::FilePath("/proc/cmdline"), &cmdline));
-  return cmdline.find("cros_legacy") != string::npos;
-}
-}  // namespace
-
 bool OmahaResponseHandlerAction::GetKernelPath(const std::string& part_path,
                                                std::string* kernel_path) {
-  // If 'cros_legacy' is in the kernel args we are on an old system
-  // using SYSLINUX style bootloader configuration. Leave the kernel to
-  // the post install script on such systems.
-  if (IsCrosLegacySystem()) {
-    *kernel_path = "";
-    return true;
-  }
-
   files::FilePath coreos_kernel_a = files::FilePath("/boot/coreos/vmlinuz-a");
   files::FilePath coreos_kernel_b = files::FilePath("/boot/coreos/vmlinuz-b");
 
