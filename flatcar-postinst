@@ -127,7 +127,8 @@ if [ "${OEMID}" != "" ] && { [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ]
       fi
     done
     # Note that in the case of VERSION=NEXT_VERSION we will replace the running sysext and maybe it's better
-    # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk)
+    # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk).
+    # However, as soon as update-engine would already download the payload, we should skip the overwriting.
     SUCCESS=false
     # Preferred is to download from the location given by the Omaha response
     # which only works with a new update-engine client that creates "full-response",
