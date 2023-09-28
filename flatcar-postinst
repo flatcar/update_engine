@@ -71,17 +71,26 @@ sysext_download() {
       entries=$(grep -m 1 -o "<package name=\"${name}\"[^>]*" "${from}")
       url="${base}/${name}"
       size=$(echo "${entries}" | grep -o 'size="[0-9]*' | cut -d '"' -f 2)
-      hash=$(echo "${entries}" | grep -o -P 'hash="[^"]*' | cut -d '"' -f 2) # openssl dgst -binary -sha1 < "$PAYLOAD" | base64
+      hash=$(echo "${entries}" | { grep -o -P 'hash="[^"]*' || true ; } | cut -d '"' -f 2) # openssl dgst -binary -sha1 < "$PAYLOAD" | base64
+      hash_sha256=$(echo "${entries}" | { grep -o -P 'hash_sha256="[^"]*' || true ; } | cut -d '"' -f 2) # sha256sum -b "$PAYLOAD" | cut -d " " -f 1
     fi
     rm -f "${target}.tmp"
     curl -fsSL --retry-delay 1 --retry 60 --retry-connrefused --retry-max-time 60 --connect-timeout 20 -o "${target}.tmp" "${url}"
-    if [ "${size}" != "" ] && [ "${hash}" != "" ]; then
+    if [ "${base}" != "" ]; then
       if [ "$(stat --printf='%s' "${target}.tmp")" != "${size}" ]; then
         echo "Size mismatch for ${name}" >&2
         return 1 # jump to ret=
       fi
-      if [ "$(openssl dgst -binary -sha1 < "${target}.tmp" | base64)" != "${hash}" ]; then
+      if [ "${hash}" = "" ] && [ "${hash_sha256}" = "" ]; then
+        echo "At least one hash is expected, found none in Omaha package for ${name}" >&2
+        return 1 # jump to ret=
+      fi
+      if [ "${hash}" != "" ] && [ "$(openssl dgst -binary -sha1 < "${target}.tmp" | base64)" != "${hash}" ]; then
         echo "Hash mismatch for ${name}" >&2
+        return 1 # jump to ret=
+      fi
+      if [ "${hash_sha256}" != "" ] && [ "$(sha256sum -b "${target}.tmp" | cut -d " " -f 1)" != "${hash_sha256}" ]; then
+        echo "Hash SHA256 mismatch for ${name}" >&2
         return 1 # jump to ret=
       fi
     fi
@@ -118,7 +127,8 @@ if [ "${OEMID}" != "" ] && { [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ]
       fi
     done
     # Note that in the case of VERSION=NEXT_VERSION we will replace the running sysext and maybe it's better
-    # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk)
+    # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk).
+    # However, as soon as update-engine would already download the payload, we should skip the overwriting.
     SUCCESS=false
     # Preferred is to download from the location given by the Omaha response
     # which only works with a new update-engine client that creates "full-response",
