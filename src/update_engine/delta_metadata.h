@@ -7,6 +7,7 @@
 
 #include <inttypes.h>
 
+#include <cstdint>
 #include <vector>
 
 #include <update_engine/action_processor.h>

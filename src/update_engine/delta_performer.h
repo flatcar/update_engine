@@ -7,6 +7,7 @@
 
 #include <inttypes.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

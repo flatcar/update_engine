@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_PLATFORM_UPDATE_ENGINE_GRAPH_TYPES_H__
 #define CHROMEOS_PLATFORM_UPDATE_ENGINE_GRAPH_TYPES_H__
 
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <set>

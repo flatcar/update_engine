@@ -6,6 +6,7 @@
 #define CHROMEOS_PLATFORM_UPDATE_ENGINE_PAYLOAD_STATE_INTERFACE_H__
 
 #include <chrono>
+#include <cstdint>
 #include <string>
 
 #include "update_engine/action_processor.h"
