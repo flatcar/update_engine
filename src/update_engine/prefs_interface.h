@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_PLATFORM_UPDATE_ENGINE_PREFS_INTERFACE_H__
 #define CHROMEOS_PLATFORM_UPDATE_ENGINE_PREFS_INTERFACE_H__
 
+#include <cstdint>
 #include <string>
 
 namespace chromeos_update_engine {

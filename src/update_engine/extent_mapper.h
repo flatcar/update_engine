@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_PLATFORM_UPDATE_ENGINE_EXTENT_MAPPER_H__
 #define CHROMEOS_PLATFORM_UPDATE_ENGINE_EXTENT_MAPPER_H__
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

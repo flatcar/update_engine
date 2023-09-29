@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_PLATFORM_UPDATE_ENGINE_PAYLOAD_STATE_H__
 #define CHROMEOS_PLATFORM_UPDATE_ENGINE_PAYLOAD_STATE_H__
 
+#include <cstdint>
 #include <chrono>
 
 #include "update_engine/payload_state_interface.h"

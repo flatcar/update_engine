@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_PLATFORM_UPDATE_ENGINE_PAYLOAD_SIGNER_H__
 #define CHROMEOS_PLATFORM_UPDATE_ENGINE_PAYLOAD_SIGNER_H__
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

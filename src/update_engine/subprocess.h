@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_PLATFORM_UPDATE_ENGINE_SUBPROCESS_H__
 #define CHROMEOS_PLATFORM_UPDATE_ENGINE_SUBPROCESS_H__
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
