@@ -27,7 +27,14 @@ map<std::string, std::string> ParseString(const string& str) {
     string::size_type pos = it->find('=');
     if (pos == string::npos)
       continue;
-    ret[it->substr(0, pos)] = it->substr(pos + 1);
+    string val = it->substr(pos + 1);
+    if ((val.length() >= 2) &&
+      ((val.front() == '\"' && val.back() == '\"') ||
+      (val.front() == '\'' && val.back() == '\''))) {
+      val = val.substr(1, val.length() - 2);
+    }
+
+    ret[it->substr(0, pos)] = val;
   }
   return ret;
 }
