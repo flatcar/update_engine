@@ -158,6 +158,7 @@ if [ "${OEMID}" != "" ] && { [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ]
     # We don't need to check if it's the initial MVP OEM because it's an update payload provided for a particular version
     echo "Trying to place /var/lib/update_engine/oem-${OEMID}-${NEXT_VERSION}.raw on OEM partition" >&2
     if ! mv "/var/lib/update_engine/oem-${OEMID}.raw" "${NEW_SYSEXT}"; then
+        rm -f "${NEW_SYSEXT}"
         echo "That failed, moving it to right location on root partition" >&2
         NEW_SYSEXT="/etc/flatcar/oem-sysext/oem-${OEMID}-${NEXT_VERSION}.raw"
         mv "/var/lib/update_engine/oem-${OEMID}.raw" "${NEW_SYSEXT}"
