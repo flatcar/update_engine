@@ -18,7 +18,7 @@ namespace chromeos_update_engine {
 class SimpleKeyValueStoreTest : public ::testing::Test {};
 
 TEST(SimpleKeyValueStoreTest, SimpleTest) {
-  string blob = "A=B\nC=\n=\nFOO=BAR=BAZ\nBAR=BAX\nMISSING=NEWLINE";
+  string blob = "A=B\nC=\n=\nFOO=BAR=BAZ\nALIAS='my alias'\nEMPTY=''\nD=\"\"\nTEST=\"this is a test\"\nBAR=BAX\nMISSING=NEWLINE";
   map<string, string> parts = simple_key_value_store::ParseString(blob);
   string combined = simple_key_value_store::AssembleString(parts);
   map<string, string> combined_parts =
@@ -26,13 +26,17 @@ TEST(SimpleKeyValueStoreTest, SimpleTest) {
   map<string, string>* maps[] = { &parts, &combined_parts };
   for (size_t i = 0; i < arraysize(maps); i++) {
     map<string, string>* test_map = maps[i];
-    EXPECT_EQ(6, test_map->size()) << "i = " << i;
+    EXPECT_EQ(10, test_map->size()) << "i = " << i;
     EXPECT_EQ("B", (*test_map)["A"]) << "i = " << i;
     EXPECT_EQ("", (*test_map)["C"]) << "i = " << i;
     EXPECT_EQ("", (*test_map)[""]) << "i = " << i;
     EXPECT_EQ("BAR=BAZ", (*test_map)["FOO"]) << "i = " << i;
     EXPECT_EQ("BAX", (*test_map)["BAR"]) << "i = " << i;
     EXPECT_EQ("NEWLINE", (*test_map)["MISSING"]) << "i = " << i;
+    EXPECT_EQ("my alias", (*test_map)["ALIAS"]) << "i = " << i;
+    EXPECT_EQ("this is a test", (*test_map)["TEST"]) << "i = " << i;
+    EXPECT_EQ("", (*test_map)["EMPTY"]) << "i = " << i;
+    EXPECT_EQ("", (*test_map)["D"]) << "i = " << i;
   }
 }
 
