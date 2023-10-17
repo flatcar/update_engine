@@ -1,5 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2014 The CoreOS Authors.
+# Copyright (c) 2023 The Flatcar Maintainers.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -293,36 +294,6 @@ if [[ -z "${LDSO}" ]]; then
     exit 1
 fi
 LIBS="${LDSO%/*}"
-
-# Use torcx binary from next-OS image to ensure compatibility
-TORCX_BIN=""
-for bindir in bin/old_bins bin sbin lib/coreos; do
-    if [[ -x "${INSTALL_MNT}/${bindir}/torcx" ]]; then
-        TORCX_BIN="${INSTALL_MNT}/${bindir}/torcx"
-        break
-    fi
-done
-if [[ -z "${TORCX_BIN}" ]]; then
-    echo "Failed to locate torcx binary in ${INSTALL_MNT}" 2>&1 | tee_journal
-    exit 1
-fi
-
-call_torcx() {
-    "${TORCX_BIN}" "$@" 2>&1 | tee_journal
-}
-
-# Check if torcx requires any additional addon available on a remote.
-: "${TORCX_CHECK_REMOTE_ONLY:="true"}"
-TORCX_USR_MOUNTPOINT="${INSTALL_MNT}"
-if [[ -e /etc/torcx/next-profile ]] && [[ -n "${TORCX_BIN}" ]] ; then
-    export -- TORCX_USR_MOUNTPOINT
-    if ! call_torcx profile check --remote-only="${TORCX_CHECK_REMOTE_ONLY}" --os-release="${NEXT_VERSION_ID}" ; then
-        echo "Populating local torcx store with remote images. This may take some time." | tee_journal
-        call_torcx profile populate --os-release="${NEXT_VERSION_ID}"
-        call_torcx profile check --remote-only="${TORCX_CHECK_REMOTE_ONLY}" --os-release="${NEXT_VERSION_ID}"
-        call_torcx image clear-versioned -k "${VERSION_ID}"  -k "${NEXT_VERSION_ID}"
-    fi
-fi
 
 # Mark the new install with one try and the highest priority
 call_cgpt repair "${INSTALL_DEV}"
