@@ -142,7 +142,7 @@ while IFS= read -r LINE; do
   "data:"*)
             SIGDATA=$(echo "${LINE}" | cut -d '"' -f 2- | head -c-2 | sed 's/%/%%/g')
             # This is a workaround for the dev-key vs prod-key case: sed '/signatures {/d' | sed '/  version: 2/d'
-            SIGHEX=$(printf -- "${SIGDATA}" | sed '/signatures {/d' | sed '/  version: 2/d' | openssl rsautl -verify -pubin -inkey "${PUBKEY}" -raw | tail -c 32 | od -An -vtx1  -w1024 | tr -d ' ')
+            SIGHEX=$(printf -- "${SIGDATA}" | sed '/signatures {/d' | sed '/  version: 2/d' | openssl rsautl -verify -pubin -inkey "${PUBKEY}" -raw | tail -c 32 | od -An -vtx1  -w1024 | tr -d ' ' || true)
             # The raw output instead of asn1parse is used to easily extract the sha256 checksum (done by tail -c 32)
             # We also calculate the payload hash that the signature was done for, note that it's of course not the whole file but only up to the attached signature itself
             PAYLOADHASH=$(head -c "$((20 + MLEN + SIGOFFSET))" "${FILE}" | sha256sum | cut -d ' ' -f 1)
