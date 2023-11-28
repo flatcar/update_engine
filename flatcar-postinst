@@ -217,6 +217,18 @@ for NAME in $(grep -h -o '^[^#]*' /etc/flatcar/enabled-sysext.conf /usr/share/fl
     mv  "/var/lib/update_engine/flatcar-${NAME}.raw" "/etc/flatcar/sysext/flatcar-${NAME}-${NEXT_VERSION}.raw"
 done
 
+# A mkdir -p /etc/extensions was done for the OEM sysext symlink when the /etc overlay
+# was already set up but we didn't ship /etc/extensions in the lowerdir. Since overlayfs
+# creates any folders that don't exist in the lowerdir as opaque it means that when
+# they appear later in the lowerdir through an update, the lowerdir folder is ignored.
+# That happened in the update from, e.g., 3760.1.0 to 3794.0.0 to where /etc/extensions
+# wasn't present in /usr/share/flatcar/etc/.
+# To fix this, remove any opaque markers for this directory. Other common folders which
+# we introduce later in the lowerdir could also be handled that way, e.g., /etc/cni/.
+if mountpoint -q /etc; then
+  unshare -m sh -c "umount /etc && mkdir -p /etc/extensions && attr -R -r overlay.opaque /etc/extensions || true"
+fi
+
 # Keep old nodes on cgroup v1
 if [[ "${BUILD_ID}" != "dev-"* ]]; then
     if [ "${VERSION_ID%%.*}" -lt 2956 ]; then
