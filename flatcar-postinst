@@ -134,7 +134,7 @@ if [ "${OEMID}" != "" ] && { [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ]
     # which only works with a new update-engine client that creates "full-response",
     # and we also have to check that this file was created fresh for this update operation
     # (relies on the reset of /var/lib/update_engine/prefs/previous-version that old clients also do)
-    if [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -gt $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ]; then
+    if [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -ge $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ]; then
         rm -f "/var/lib/update_engine/oem-${OEMID}.raw"
         sysext_download "oem-${OEMID}.gz" "/var/lib/update_engine/oem-${OEMID}.raw" /var/lib/update_engine/prefs/full-response
     fi
@@ -147,6 +147,7 @@ if [ "${OEMID}" != "" ] && { [ -e "${INSTALL_MNT}/share/flatcar/oems/${OEMID}" ]
           PAYLOADSERVER=bincache-server
           PAYLOADNAME="flatcar_test_update-oem-${OEMID}.gz"
         fi
+        echo "Falling back to ${PAYLOADSERVER} for extension 'oem-${OEMID}'" >&2
         sysext_download "${PAYLOADNAME}" "/var/lib/update_engine/oem-${OEMID}.raw" "${PAYLOADSERVER}"
     fi
     if [ "${SUCCESS}" = false ]; then
@@ -193,7 +194,7 @@ for NAME in $(grep -h -o '^[^#]*' /etc/flatcar/enabled-sysext.conf /usr/share/fl
     # which only works with a new update-engine client that creates "full-response",
     # and we also have to check that this file was created fresh for this update operation
     # (relies on the reset of /var/lib/update_engine/prefs/previous-version that old clients also do)
-    if [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -gt $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ]; then
+    if [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -ge $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ]; then
         rm -f "/var/lib/update_engine/flatcar-${NAME}.raw"
         sysext_download "flatcar-${NAME}.gz" "/var/lib/update_engine/flatcar-${NAME}.raw" /var/lib/update_engine/prefs/full-response
     fi
@@ -206,6 +207,7 @@ for NAME in $(grep -h -o '^[^#]*' /etc/flatcar/enabled-sysext.conf /usr/share/fl
           PAYLOADSERVER=bincache-server
           PAYLOADNAME="flatcar_test_update-flatcar-${NAME}.gz"
         fi
+        echo "Falling back to ${PAYLOADSERVER} for extension 'flatcar-${NAME}'" >&2
         sysext_download "${PAYLOADNAME}" "/var/lib/update_engine/flatcar-${NAME}.raw" "${PAYLOADSERVER}"
     fi
     if [ "${SUCCESS}" = false ]; then
