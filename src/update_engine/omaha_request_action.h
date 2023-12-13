@@ -115,7 +115,8 @@ class OmahaRequestAction : public Action<OmahaRequestAction>,
   OmahaRequestAction(SystemState* system_state,
                      OmahaEvent* event,
                      HttpFetcher* http_fetcher,
-                     bool ping_only);
+                     bool ping_only,
+                     bool store_response);
   virtual ~OmahaRequestAction();
   typedef ActionTraits<OmahaRequestAction>::InputObjectType InputObjectType;
   typedef ActionTraits<OmahaRequestAction>::OutputObjectType OutputObjectType;
@@ -203,6 +204,9 @@ class OmahaRequestAction : public Action<OmahaRequestAction>,
   // are sent to Omaha.
   int ping_active_days_;
   int ping_roll_call_days_;
+
+  // If true, store full response to XML dump file for the postinst action.
+  bool store_response_;
 
   DISALLOW_COPY_AND_ASSIGN(OmahaRequestAction);
 };
