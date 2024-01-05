@@ -51,56 +51,35 @@ OEMID=$({ grep -m 1 -o "^ID=.*" "${OEM_MNT}"/oem-release || true ; } | cut -d = 
 sysext_download() {
     local name="$1" # Payload name
     local target="$2" # Path to write the payload to, writing does not need to be atomic because the caller later does an atomic move
-    local from="${3-}" # Either path to XML dump or the constant "release-server"
-    local base=""
-    local entries=""
-    local hash=""
-    local size=""
-    local url=""
+    local from="$3" # Either path to XML dump or the constant "release-server"
+    local target_tmpdir=""
+    local extracted_filename="${name/%.gz/.raw}"
+    local ARG=()
+    local loader=
     local ret
     SUCCESS=false
+    target_tmpdir="$(dirname "${target}")/ue-rs/"
     set +e
     (
     set -e
-    # TODO: Replace the below with invoking an ue-rs helper binary for downloading the payload "name", either from the XML data or the release server ("from"), and write unpacked, verified file to "target"
+    rm -rf "${target_tmpdir}"
+    mkdir -p "${target_tmpdir}"
     if [ "${from}" = "release-server" ]; then
-      url="https://update.release.flatcar-linux.net/${FLATCAR_BOARD}/${NEXT_VERSION}/${name}"
+      ARG=("-u" "https://update.release.flatcar-linux.net/${FLATCAR_BOARD}/${NEXT_VERSION}/${name}")
     elif [ "${from}" = "bincache-server" ]; then
-      url="https://bincache.flatcar-linux.net/images/${FLATCAR_BOARD/-usr}/${NEXT_VERSION}/${name}"
+      ARG=("-u" "https://bincache.flatcar-linux.net/images/${FLATCAR_BOARD/-usr}/${NEXT_VERSION}/${name}")
     else
-      base=$(grep -m 1 -o 'codebase="[^"]*"' "${from}" | cut -d '"' -f 2)
-      entries=$(grep -m 1 -o "<package name=\"${name}\"[^>]*" "${from}")
-      url="${base}/${name}"
-      size=$(echo "${entries}" | grep -o 'size="[0-9]*' | cut -d '"' -f 2)
-      hash=$(echo "${entries}" | { grep -o -P 'hash="[^"]*' || true ; } | cut -d '"' -f 2) # openssl dgst -binary -sha1 < "$PAYLOAD" | base64
-      hash_sha256=$(echo "${entries}" | { grep -o -P 'hash_sha256="[^"]*' || true ; } | cut -d '"' -f 2) # sha256sum -b "$PAYLOAD" | cut -d " " -f 1
-    fi
-    rm -f "${target}.tmp"
-    curl -fsSL --retry-delay 1 --retry 60 --retry-connrefused --retry-max-time 60 --connect-timeout 20 -o "${target}.tmp" "${url}"
-    if [ "${base}" != "" ]; then
-      if [ "$(stat --printf='%s' "${target}.tmp")" != "${size}" ]; then
-        echo "Size mismatch for ${name}" >&2
-        return 1 # jump to ret=
-      fi
-      if [ "${hash}" = "" ] && [ "${hash_sha256}" = "" ]; then
-        echo "At least one hash is expected, found none in Omaha package for ${name}" >&2
-        return 1 # jump to ret=
-      fi
-      if [ "${hash}" != "" ] && [ "$(openssl dgst -binary -sha1 < "${target}.tmp" | base64)" != "${hash}" ]; then
-        echo "Hash mismatch for ${name}" >&2
-        return 1 # jump to ret=
-      fi
-      if [ "${hash_sha256}" != "" ] && [ "$(sha256sum -b "${target}.tmp" | cut -d " " -f 1)" != "${hash_sha256}" ]; then
-        echo "Hash SHA256 mismatch for ${name}" >&2
-        return 1 # jump to ret=
-      fi
+      ARG=("-i" "${from}" -m "${name}")
     fi
     # Using "${INSTALL_MNT}" here is ok because it was verified first by update-engine
-    PROTOPATH="${INSTALL_MNT}"/share/update_engine/ "${INSTALL_MNT}"/share/update_engine/decode_payload /usr/share/update_engine/update-payload-key.pub.pem "${target}.tmp" "${target}"
+    loader=$(ls "${INSTALL_MNT}"/lib64/ld-linux-*.so.* | head -n 1)
+    # A simple LD_LIBRARY_PATH is not enough if the loader is too old
+    "${loader}" --library-path "${INSTALL_MNT}"/lib64 "${INSTALL_MNT}"/bin/download_sysext -p /usr/share/update_engine/update-payload-key.pub.pem -o "${target_tmpdir}" "${ARG[@]}"
+    mv "${target_tmpdir}/${extracted_filename}" "${target}"
     )
     ret=$?
     set -e
-    rm -f "${target}.tmp"
+    rm -rf "${target_tmpdir}"
     if [ "${ret}" -eq 0 ]; then
       SUCCESS=true
     fi
