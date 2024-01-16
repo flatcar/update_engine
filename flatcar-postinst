@@ -52,12 +52,13 @@ sysext_download() {
     local name="$1" # Payload name
     local target="$2" # Path to write the payload to, writing does not need to be atomic because the caller later does an atomic move
     local from="$3" # Either path to XML dump or the constant "release-server"
-    local target_tmpdir=""
-    local extracted_filename="${name/%.gz/.raw}"
+    local target_tmpdir=
+    local extracted_filename=
     local ARG=()
     local loader=
     local ret
     SUCCESS=false
+    extracted_filename=$(basename "${target}")
     target_tmpdir="$(dirname "${target}")/ue-rs/"
     set +e
     (
@@ -69,12 +70,12 @@ sysext_download() {
     elif [ "${from}" = "bincache-server" ]; then
       ARG=("-u" "https://bincache.flatcar-linux.net/images/${FLATCAR_BOARD/-usr}/${NEXT_VERSION}/${name}")
     else
-      ARG=("-i" "${from}" -m "${name}")
+      ARG=("-i" "${from}" -m "*${name}" -t)
     fi
     # Using "${INSTALL_MNT}" here is ok because it was verified first by update-engine
     loader=$(ls "${INSTALL_MNT}"/lib64/ld-linux-*.so.* | head -n 1)
     # A simple LD_LIBRARY_PATH is not enough if the loader is too old
-    "${loader}" --library-path "${INSTALL_MNT}"/lib64 "${INSTALL_MNT}"/bin/download_sysext -p /usr/share/update_engine/update-payload-key.pub.pem -o "${target_tmpdir}" "${ARG[@]}"
+    "${loader}" --library-path "${INSTALL_MNT}"/lib64 "${INSTALL_MNT}"/bin/download_sysext -p /usr/share/update_engine/update-payload-key.pub.pem -o "${target_tmpdir}" -n "${extracted_filename}" "${ARG[@]}"
     mv "${target_tmpdir}/${extracted_filename}" "${target}"
     )
     ret=$?
