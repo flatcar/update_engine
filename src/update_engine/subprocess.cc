@@ -88,7 +88,7 @@ void FreeArgvInError(char** argv) {
 // Note: Caller responsible for free()ing the returned value!
 // Will return NULL on failure and free any allocated memory.
 char** ArgPointer() {
-  const char* keys[] = {"LD_LIBRARY_PATH", "PATH"};
+  const char* keys[] = {"LD_LIBRARY_PATH", "PATH", "ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY"};
   char** ret = new char*[arraysize(keys) + 1];
   int pointer = 0;
   for (size_t i = 0; i < arraysize(keys); i++) {
