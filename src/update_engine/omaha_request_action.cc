@@ -618,6 +618,9 @@ void OmahaRequestAction::TransferComplete(HttpFetcher *fetcher,
   string current_response(response_buffer_.begin(), response_buffer_.end());
   LOG(INFO) << "Omaha request response: " << current_response;
 
+  LOG_IF(WARNING, !system_state_->prefs()->SetString(kPrefsFullResponse, current_response))
+      << "Unable to write full response.";
+
   // Events are best effort transactions -- assume they always succeed.
   if (IsEvent()) {
     CHECK(!HasOutputPipe()) << "No output pipe allowed for event requests.";

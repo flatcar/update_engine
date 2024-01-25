@@ -38,6 +38,7 @@ const char kPrefsCurrentUrlIndex[] = "current-url-index";
 const char kPrefsCurrentUrlFailureCount[] = "current-url-failure-count";
 const char kPrefsBackoffExpiryTime[] = "backoff-expiry-time";
 const char kPrefsAlephVersion[] = "aleph-version";
+const char kPrefsFullResponse[] = "full-response";
 
 bool Prefs::Init(const files::FilePath& prefs_dir) {
   prefs_dir_ = prefs_dir;
