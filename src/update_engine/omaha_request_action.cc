@@ -242,13 +242,15 @@ string XmlEncode(const string& input) {
 OmahaRequestAction::OmahaRequestAction(SystemState* system_state,
                                        OmahaEvent* event,
                                        HttpFetcher* http_fetcher,
-                                       bool ping_only)
+                                       bool ping_only,
+                                       bool store_response)
     : system_state_(system_state),
       event_(event),
       http_fetcher_(http_fetcher),
       ping_only_(ping_only),
       ping_active_days_(0),
-      ping_roll_call_days_(0) {
+      ping_roll_call_days_(0),
+      store_response_(store_response) {
   params_ = system_state->request_params();
 }
 
@@ -618,8 +620,10 @@ void OmahaRequestAction::TransferComplete(HttpFetcher *fetcher,
   string current_response(response_buffer_.begin(), response_buffer_.end());
   LOG(INFO) << "Omaha request response: " << current_response;
 
-  LOG_IF(WARNING, !system_state_->prefs()->SetString(kPrefsFullResponse, current_response))
-      << "Unable to write full response.";
+  if (store_response_) {
+    LOG_IF(WARNING, !system_state_->prefs()->SetString(kPrefsFullResponse, current_response))
+        << "Unable to write full response.";
+  }
 
   // Events are best effort transactions -- assume they always succeed.
   if (IsEvent()) {

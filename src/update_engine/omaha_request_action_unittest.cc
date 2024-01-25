@@ -152,7 +152,8 @@ bool TestUpdateCheck(PrefsInterface* prefs,
   OmahaRequestAction action(&mock_system_state,
                             NULL,
                             fetcher,
-                            ping_only);
+                            ping_only,
+                            false);
   processor.EnqueueAction(&action);
 
   ObjectCollectorAction<OmahaResponse> collector_action;
@@ -184,7 +185,7 @@ void TestEvent(OmahaRequestParams params,
   ActionProcessor processor;
   ActionTestDelegate<OmahaRequestAction> delegate;
 
-  OmahaRequestAction action(&mock_system_state, event, fetcher, false);
+  OmahaRequestAction action(&mock_system_state, event, fetcher, false, false);
   processor.EnqueueAction(&action);
 
   delegate.RunProcessorInMainLoop(&processor);
@@ -253,6 +254,7 @@ TEST(OmahaRequestActionTest, NoOutputPipeTest) {
   OmahaRequestAction action(&mock_system_state, NULL,
                             new MockHttpFetcher(http_response.data(),
                                                 http_response.size()),
+                            false,
                             false);
   processor.EnqueueAction(&action);
 
@@ -443,6 +445,7 @@ TEST(OmahaRequestActionTest, TerminateTransferTest) {
   OmahaRequestAction action(&mock_system_state, NULL,
                             new MockHttpFetcher(http_response.data(),
                                                 http_response.size()),
+                            false,
                             false);
   TerminateEarlyTestProcessorDelegate delegate;
   delegate.loop_ = loop;
@@ -558,7 +561,7 @@ TEST(OmahaRequestActionTest, FormatUpdateCheckOutputTest) {
   NiceMock<PrefsMock> prefs;
   EXPECT_CALL(prefs, GetString(kPrefsPreviousVersion, _))
       .WillOnce(DoAll(SetArgumentPointee<1>(string("")), Return(true)));
-  EXPECT_CALL(prefs, SetString(kPrefsFullResponse, _)).Times(1);
+  EXPECT_CALL(prefs, SetString(kPrefsFullResponse, _)).Times(0);
   EXPECT_CALL(prefs, SetString(kPrefsPreviousVersion, _)).Times(1);
   ASSERT_FALSE(TestUpdateCheck(&prefs,
                                GetDefaultTestParams(),
@@ -627,6 +630,7 @@ TEST(OmahaRequestActionTest, IsEventTest) {
       NULL,
       new MockHttpFetcher(http_response.data(),
                           http_response.size()),
+      false,
       false);
   EXPECT_FALSE(update_check_action.IsEvent());
 
@@ -637,6 +641,7 @@ TEST(OmahaRequestActionTest, IsEventTest) {
       new OmahaEvent(OmahaEvent::kTypeUpdateComplete),
       new MockHttpFetcher(http_response.data(),
                           http_response.size()),
+      false,
       false);
   EXPECT_TRUE(event_action.IsEvent());
 }

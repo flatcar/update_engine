@@ -188,7 +188,8 @@ void UpdateAttempter::BuildUpdateActions(bool interactive) {
       new OmahaRequestAction(system_state_,
                              NULL,
                              update_check_fetcher,  // passes ownership
-                             false));
+                             false,
+                             true)); // Store full response for the update check
   shared_ptr<OmahaResponseHandlerAction> response_handler_action(
       new OmahaResponseHandlerAction(system_state_));
   shared_ptr<FilesystemCopierAction> filesystem_copier_action(
@@ -199,6 +200,7 @@ void UpdateAttempter::BuildUpdateActions(bool interactive) {
                              new OmahaEvent(
                                  OmahaEvent::kTypeUpdateDownloadStarted),
                              new LibcurlHttpFetcher(),
+                             false,
                              false));
   LibcurlHttpFetcher* download_fetcher = new LibcurlHttpFetcher();
   download_fetcher->set_check_certificate(CertificateChecker::kDownload);
@@ -214,6 +216,7 @@ void UpdateAttempter::BuildUpdateActions(bool interactive) {
                              new OmahaEvent(
                                  OmahaEvent::kTypeUpdateDownloadFinished),
                              new LibcurlHttpFetcher(),
+                             false,
                              false));
   shared_ptr<FilesystemCopierAction> filesystem_verifier_action(
       new FilesystemCopierAction(true));
@@ -227,6 +230,7 @@ void UpdateAttempter::BuildUpdateActions(bool interactive) {
       new OmahaRequestAction(system_state_,
                              new OmahaEvent(OmahaEvent::kTypeUpdateComplete),
                              new LibcurlHttpFetcher(),
+                             false,
                              false));
 
   download_action->set_delegate(this);
@@ -620,6 +624,7 @@ bool UpdateAttempter::ScheduleErrorEventAction() {
       new OmahaRequestAction(system_state_,
                              error_event_.release(),  // Pass ownership.
                              new LibcurlHttpFetcher(),
+                             false,
                              false));
   actions_.push_back(shared_ptr<AbstractAction>(error_event_action));
   processor_->EnqueueAction(error_event_action.get());
@@ -690,7 +695,8 @@ void UpdateAttempter::PingOmaha() {
         new OmahaRequestAction(system_state_,
                                NULL,
                                new LibcurlHttpFetcher(),
-                               true));
+                               true,
+                               false));
     actions_.push_back(shared_ptr<OmahaRequestAction>(ping_action));
     processor_->set_delegate(NULL);
     processor_->EnqueueAction(ping_action.get());
