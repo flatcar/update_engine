@@ -45,6 +45,33 @@ tee_journal() {
     tee >(systemd-cat -t coreos-postinst)
 }
 
+# Workaround when updating from old update-engine clients that don't pass the proxy env vars:
+
+get_unit_env_val() {
+    local varname="$1"
+    local envfiles=()
+    envfiles=( $({ systemctl show --property=EnvironmentFiles --property=EnvironmentFile update-engine.service || true ; } | { grep -P -o "EnvironmentFiles=\K[^ ]*" || true ; }) )
+    # Note: Values with space won't be correctly parsed because they get truncated to first space when we ignore quoting for '"Environment="VAR1=a b" Environment=VAR2=c' cases.
+    # Also, for reading env files we drop quotes with sed first before grepping to at least remove unnecessary quotes but we also still truncate.
+    { systemctl show --property=Environment update-engine.service || true ; } | { sed "s/[\"']//g" - "${envfiles[@]}" || true ; } | grep -m 1 -Ph -o "${varname}=\K[^ ]*"
+    # This propagates the grep return code for the function
+}
+
+if [ "${ALL_PROXY-unset}" = "unset" ] && [ "${HTTP_PROXY-unset}" = "unset" ] && [ "${HTTPS_PROXY-unset}" = "unset" ]; then
+  VARVAL=$(get_unit_env_val ALL_PROXY || echo unset)
+  if [ "${VARVAL}" != "unset" ]; then
+    export ALL_PROXY="${VARVAL}"
+  fi
+  VARVAL=$(get_unit_env_val HTTP_PROXY || echo unset)
+  if [ "${VARVAL}" != "unset" ]; then
+    export HTTP_PROXY="${VARVAL}"
+  fi
+  VARVAL=$(get_unit_env_val HTTPS_PROXY || echo unset)
+  if [ "${VARVAL}" != "unset" ]; then
+    export HTTPS_PROXY="${VARVAL}"
+  fi
+fi
+
 OEMID=$({ grep -m 1 -o "^ID=.*" "${OEM_MNT}"/oem-release || true ; } | cut -d = -f 2)
 
 # Must not be used as "if sysext_download; then" or "sysext_download ||" because that makes set -e a no-op, and also must not use "( sysext_download )" because we want to set the global SUCCESS variable.
@@ -85,6 +112,12 @@ sysext_download() {
       SUCCESS=true
     fi
 }
+
+# Workaround to support updating from old airgapped clients that can't directly reach the Internet:
+# Extract the XML response from the service logs if we don't have one for this action run.
+if ! { [ -e /var/lib/update_engine/prefs/full-response ] && [ $(stat -L --printf='%Y' /var/lib/update_engine/prefs/full-response) -ge $(stat -L --printf='%Y' /var/lib/update_engine/prefs/previous-version) ] ; }; then
+    { journalctl -b 0 -u update-engine -o cat --no-pager || true ; } | { grep -Pzo "(?s)Omaha request response: .*?/response>" || true ; } | tr '\n' ' ' | tr '\0' '\n' | sed 's/Omaha request response: //g' | { tail -n 3 || true ; } | head -n 1 > /var/lib/update_engine/prefs/full-response
+fi
 
 # To know whether an OEM update payload is expected we can't rely on checking if the Omaha response contains one
 # because users may run their own instance and forget to supply it, or this is an old instance that doesn't hand us
