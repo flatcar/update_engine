@@ -96,8 +96,9 @@ sysext_download() {
       url="https://bincache.flatcar-linux.net/images/${FLATCAR_BOARD/-usr}/${NEXT_VERSION}/${name}"
     else
       base=$(grep -m 1 -o 'codebase="[^"]*"' "${from}" | cut -d '"' -f 2)
-      entries=$(grep -m 1 -o "<package name=\"${name}\"[^>]*" "${from}")
-      url="${base}/${name}"
+      entries=$(grep -m 1 -o "<package name=\"[^\"]*${name}\"[^>]*" "${from}")
+      name=$(echo "${entries}" | { grep -o 'name="[^"]*' || true; } | cut -d '"' -f 2)
+      url="${base%/}/${name}"
       size=$(echo "${entries}" | grep -o 'size="[0-9]*' | cut -d '"' -f 2)
       hash=$(echo "${entries}" | { grep -o -P 'hash="[^"]*' || true ; } | cut -d '"' -f 2) # openssl dgst -binary -sha1 < "$PAYLOAD" | base64
       hash_sha256=$(echo "${entries}" | { grep -o -P 'hash_sha256="[^"]*' || true ; } | cut -d '"' -f 2) # sha256sum -b "$PAYLOAD" | cut -d " " -f 1
