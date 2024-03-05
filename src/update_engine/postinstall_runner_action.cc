@@ -50,7 +50,7 @@ void PostinstallRunnerAction::PerformAction() {
                temp_rootfs_dir_.c_str(),
                "btrfs",
                mountflags,
-               "norecovery");
+               "rescue=nologreplay");
     if (errno == EEXIST) {
       /* When trying to mount an identical btrfs image twice because the old
        * and new partition are identical, the kernel refuses because same UUIDs
