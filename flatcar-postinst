@@ -244,6 +244,14 @@ if mountpoint -q /etc; then
   unshare -m sh -c "umount /etc && mkdir -p /etc/extensions && attr -R -r overlay.opaque /etc/extensions || true"
 fi
 
+# Systemd version >= 256 does not boot anymore if cgroupv1 is enabled or SYSTEMD_CGROUP_ENABLE_LEGACY_FORCE=1 is set
+# See: https://github.com/systemd/systemd/releases/tag/v256-rc3
+NO_CGROUPV1_VERSION_ID=4187
+if [ ! -f "/sys/fs/cgroup/cgroup.controllers" ]; then
+    echo "Flatcar version ${NO_CGROUPV1_VERSION_ID} or higher does not support cgroupv1 anymore. Aborting the update..." >&2
+    exit 1
+fi
+
 # Keep old nodes on cgroup v1
 if [[ "${BUILD_ID}" != "dev-"* ]]; then
     if [ "${VERSION_ID%%.*}" -lt 2956 ]; then
