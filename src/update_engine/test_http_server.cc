@@ -466,7 +466,8 @@ class UrlTerms {
     return terms[index];
   }
   inline const char *GetCStr(const off_t index) const {
-    return Get(index).c_str();
+    const string& term = Get(index);
+    return term.c_str();
   }
   inline int GetInt(const off_t index) const {
     return atoi(GetCStr(index));
