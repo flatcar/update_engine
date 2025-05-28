@@ -18,7 +18,7 @@ bool DirectExtentWriter::Write(const void* bytes, size_t count) {
     return true;
   const char* c_bytes = reinterpret_cast<const char*>(bytes);
   size_t bytes_written = 0;
-  while (count - bytes_written > 0) {
+  while (bytes_written < count) {
     TEST_AND_RETURN_FALSE(next_extent_index_ < extents_.size());
     uint64_t bytes_remaining_next_extent =
         extents_[next_extent_index_].num_blocks() * block_size_ -
