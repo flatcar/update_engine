@@ -18,8 +18,8 @@ jobs:
         sudo apt update && sudo apt install -y libunwind-dev && sudo apt install -y libblkid-dev libext2fs-dev libmount-dev curl unzip libdbus-glib-1-dev protobuf-compiler libbz2-dev libgflags-dev libssl-dev libgoogle-glog-dev libcurl4-openssl-dev libxml2-dev libprotobuf-dev cmake wget libtool autoconf libgtest-dev libgmock-dev libbrotli-dev libdivsufsort-dev libsodium-dev
     - name: prep rootdev
       run: |
-        curl -sSL -o /tmp/seismograph.zip https://github.com/kinvolk/seismograph/archive/flatcar-master.zip
-        cd /tmp && unzip /tmp/seismograph.zip && cd seismograph-flatcar-master && sh autogen.sh && ./configure && make && sudo make install && sudo ldconfig
+        curl -sSL -o /tmp/seismograph.zip https://github.com/flatcar/seismograph/archive/main.zip
+        cd /tmp && unzip /tmp/seismograph.zip && cd seismograph-main && sh autogen.sh && ./configure && make && sudo make install && sudo ldconfig
 
     - name: prep bsdiff
       # because unittests depend on chromiumos version of bsdiff
