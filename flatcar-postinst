@@ -229,6 +229,7 @@ for NAME in $(grep -h -o '^[^#]*' /etc/flatcar/enabled-sysext.conf /usr/share/fl
         echo "Failed to download required OEM update payload" >&2
         exit 1
     fi
+    mkdir -p /etc/flatcar/sysext
     mv  "/var/lib/update_engine/flatcar-${NAME}.raw" "/etc/flatcar/sysext/flatcar-${NAME}-${NEXT_VERSION}.raw"
 done
 
