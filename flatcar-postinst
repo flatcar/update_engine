@@ -191,16 +191,22 @@ fi
 # and when the name is prefixed with a "-" it means that the extension should be disabled if enabled by default in the file from /usr.
 # It may contain comments starting with "#" at the beginning of a line or after a name.
 # The file is also used in bootengine to know which extensions to enable.
-# Note that we don't need "{ grep || true ; }" to suppress the match return code because in for _ in $(grep...) return codes are ignored
-for NAME in $(grep -h -o '^[^#]*' /etc/flatcar/enabled-sysext.conf /usr/share/flatcar/enabled-sysext.conf | grep -v -x -f <(grep '^-' /etc/flatcar/enabled-sysext.conf | cut -d - -f 2-) | grep -v -P '^(-).*'); do
-    KEEP="/etc/flatcar/sysext/flatcar-${NAME}-${VERSION}.raw"
-    shopt -s nullglob
-    # Delete sysext images that belonged to the now overwritten /usr partition but keep the sysext image for the current version
-    for OLD_IMAGE in /etc/flatcar/sysext/flatcar*raw; do
-      if [ "${OLD_IMAGE}" != "${KEEP}" ] && [ -f "${OLD_IMAGE}" ]; then
-        rm -f "${OLD_IMAGE}"
-      fi
+ENABLED_EXTENSIONS=$(grep -h -o '^[^#]*' /etc/flatcar/enabled-sysext.conf /usr/share/flatcar/enabled-sysext.conf | grep -v -x -f <(grep '^-' /etc/flatcar/enabled-sysext.conf | cut -d - -f 2-) | grep -v -P '^(-).*' || true)
+shopt -s nullglob
+# Delete sysext images that belonged to the now overwritten /usr partition but keep the sysext image for the current version
+for OLD_IMAGE in /etc/flatcar/sysext/flatcar*raw; do
+    SHOULD_KEEP=false
+    for NAME in ${ENABLED_EXTENSIONS}; do
+        if [ "${OLD_IMAGE}" == "/etc/flatcar/sysext/flatcar-${NAME}-${VERSION}.raw" ]; then
+            SHOULD_KEEP=true
+            break
+        fi
     done
+    if [ "${SHOULD_KEEP}" == false ] && [ -f "${OLD_IMAGE}" ]; then
+        rm -f "${OLD_IMAGE}"
+    fi
+done
+for NAME in ${ENABLED_EXTENSIONS}; do
     # Note that in the case of VERSION=NEXT_VERSION we will replace the running sysext and maybe it's better
     # to do so than not because it allows to recover from a corrupted file (where the corruption happened on disk)
     SUCCESS=false
