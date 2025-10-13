@@ -248,7 +248,7 @@ done
 # To fix this, remove any opaque markers for this directory. Other common folders which
 # we introduce later in the lowerdir could also be handled that way, e.g., /etc/cni/.
 if mountpoint -q /etc; then
-  unshare -m sh -c "umount /etc && mkdir -p /etc/extensions && attr -R -r overlay.opaque /etc/extensions || true"
+  unshare -m sh -c "umount -l /etc && mkdir -p /etc/extensions && attr -R -r overlay.opaque /etc/extensions || true"
 fi
 
 # Systemd version >= 256 does not boot anymore if cgroupv1 is enabled or SYSTEMD_CGROUP_ENABLE_LEGACY_FORCE=1 is set
