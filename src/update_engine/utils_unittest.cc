@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include <iterator>
 #include "strings/string_printf.h"
 #include "update_engine/test_utils.h"
 #include "update_engine/utils.h"
@@ -167,8 +168,7 @@ TEST(UtilsTest, FuzzIntTest) {
 
 TEST(UtilsTest, ApplyMapTest) {
   int initial_values[] = {1, 2, 3, 4, 6};
-  vector<int> collection(&initial_values[0],
-                         initial_values + arraysize(initial_values));
+  vector<int> collection(std::begin(initial_values), std::end(initial_values));
   EXPECT_EQ(arraysize(initial_values), collection.size());
   int expected_values[] = {1, 2, 5, 4, 8};
   map<int, int> value_map;
