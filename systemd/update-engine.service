@@ -2,6 +2,8 @@
 Description=Update Engine
 ConditionVirtualization=!container
 ConditionPathExists=!/usr/.noupdate
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=dbus
