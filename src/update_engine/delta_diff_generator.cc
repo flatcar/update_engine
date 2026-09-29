@@ -730,13 +730,11 @@ bool DeltaDiffGenerator::CutEdges(Graph* graph,
   vector<CutEdgeVertexes> cuts;
   cuts.reserve(edges.size());
 
-  uint64_t scratch_blocks_used = 0;
   for (const Edge& edge : edges) {
     cuts.resize(cuts.size() + 1);
     vector<Extent> old_extents =
         (*graph)[edge.first].out_edges[edge.second].extents;
     // Choose some scratch space
-    scratch_blocks_used += graph_utils::EdgeWeight(*graph, edge);
     cuts.back().tmp_extents =
         scratch_allocator.Allocate(graph_utils::EdgeWeight(*graph, edge));
     // create vertex to copy original->scratch
